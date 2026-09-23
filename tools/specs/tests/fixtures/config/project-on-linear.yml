@@ -1,0 +1,7 @@
+tracker:
+  system: linear
+  team_key: ENG
+  project: billing/api
+code_host:
+  system: github
+  spec_approvers: "@acme/spec-approvers"

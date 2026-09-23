@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .config import load_config
 from .errors import EXIT_OK, EXIT_USAGE, SpecsError, UsageError
 from .output import Output
 
@@ -36,16 +37,26 @@ class Command:
     help: str
     handler: Handler
     configure: Callable[[argparse.ArgumentParser], None] | None = None
+    needs_config: bool = False
 
 
 COMMANDS: dict[str, Command] = {}
 
 
-def command(name: str, help: str, configure: Callable[[argparse.ArgumentParser], None] | None = None):
-    """Register a subcommand. `configure` adds its arguments to the subparser."""
+def command(
+    name: str,
+    help: str,
+    configure: Callable[[argparse.ArgumentParser], None] | None = None,
+    needs_config: bool = False,
+):
+    """Register a subcommand.
+
+    `configure` adds its arguments to the subparser. With `needs_config`, the repo config is
+    loaded before the handler runs and set as `args.config`, with the repo root as `args.repo_root`.
+    """
 
     def register(handler: Handler) -> Handler:
-        COMMANDS[name] = Command(name, help, handler, configure)
+        COMMANDS[name] = Command(name, help, handler, configure, needs_config)
         return handler
 
     return register
@@ -131,7 +142,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command is None:
             raise UsageError("a subcommand is required", usage=parser.format_usage())
 
-        result = COMMANDS[args.command].handler(args, out) or Result()
+        cmd = COMMANDS[args.command]
+        if cmd.needs_config:
+            args.repo_root, args.config = load_config(Path.cwd())
+        result = cmd.handler(args, out) or Result()
         out.emit_document({"ok": result.exit_code == EXIT_OK, **result.data})
         return result.exit_code
 

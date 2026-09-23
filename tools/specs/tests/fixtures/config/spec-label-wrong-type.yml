@@ -1,0 +1,6 @@
+tracker:
+  system: github
+  spec_label: 42
+code_host:
+  system: github
+  spec_approvers: "@acme/spec-approvers"

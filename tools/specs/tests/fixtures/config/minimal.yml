@@ -1,0 +1,5 @@
+tracker:
+  system: github
+code_host:
+  system: github
+  spec_approvers: "@acme/spec-approvers"

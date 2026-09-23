@@ -39,6 +39,11 @@ def _crash(args, out):
     raise RuntimeError("boom")
 
 
+@cli.command("_test-config", help="test only: load the repo config", needs_config=True)
+def _config(args, out):
+    return cli.Result(data={"tracker": args.config.tracker_system})
+
+
 @cli.command("_test-net", help="test only: try to open a socket")
 def _net(args, out):
     socket.create_connection(("example.com", 80))

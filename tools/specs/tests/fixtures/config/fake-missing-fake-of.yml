@@ -1,0 +1,5 @@
+tracker:
+  system: fake
+code_host:
+  system: fake
+  spec_approvers: "@acme/spec-approvers"

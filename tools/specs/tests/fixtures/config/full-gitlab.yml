@@ -1,0 +1,12 @@
+tracker:
+  system: gitlab
+  project: billing/api
+  base_url: https://gitlab.example.com
+  spec_label: needs-spec
+code_host:
+  system: gitlab
+  base_url: https://gitlab.example.com
+  spec_approvers: [alice, bob]
+specs_dir: specs
+coverage:
+  test_globs: ["tests/**"]

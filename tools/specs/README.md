@@ -11,6 +11,28 @@ tools/specs/specs <command> [options]
 
 Requirements: Python 3.10+ and PyYAML (`tools/specs/requirements.txt`). Nothing else is installed.
 
+## Configuration
+
+Read from `specs/config.yml`, or `.specs/config.yml` if there is no `specs/`, at the root of the
+git repository. Unknown keys, and keys that don't apply to the selected system, are errors.
+
+```yaml
+tracker:
+  system: github            # gitlab | github | linear | fake
+  project: billing/api      # gitlab/github: when tickets live in another project
+  base_url: https://...     # gitlab/github: self-hosted instance
+  team_key: ENG             # linear: required
+  fake_of: linear           # fake: required, the system the fake behaves as
+  spec_label: spec-required # default
+code_host:
+  system: github            # gitlab | github | fake
+  base_url: https://...     # gitlab/github: self-hosted instance
+  spec_approvers: "@acme/spec-approvers"   # a group, or a list of usernames
+specs_dir: specs            # defaults to, and must equal, the directory holding this file
+coverage:
+  test_globs: ["**/test*/**", "**/*_test.*", "**/*.test.*", "**/*.spec.*"]   # default
+```
+
 ## Global options
 
 | Option | Effect |

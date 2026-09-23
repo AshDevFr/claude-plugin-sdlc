@@ -1,0 +1,6 @@
+tracker:
+  system: gitlab
+  team_key: ENG
+code_host:
+  system: gitlab
+  spec_approvers: "@acme/spec-approvers"
