@@ -1,0 +1,3 @@
+.specs/
+.venv/
+__pycache__/
