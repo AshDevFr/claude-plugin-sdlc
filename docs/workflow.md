@@ -512,9 +512,14 @@ repository; it doesn't call the tracker or the code host, and it touches no CI.
 
 ### 9.3 Hooks
 
-One, advisory: at session start in a repository with `specs/config.yml`, a single status line
-for the branch's spec (id, revision, lint findings, whether the intent changed). Silent
-elsewhere, never blocking, no network.
+Two, both advisory, silent outside a repository with `specs/config.yml`, never blocking, no
+network:
+
+- **Session start**: one status line for the branch's spec (id, revision, lint findings,
+  whether the intent changed, and `handoff waiting` when `/sdlc:handoff` left one).
+- **After Claude edits a `spec.md`**: when the body changed since the pushed version (what
+  reviewers can see) and `revision` wasn't bumped, one reminder to bump it and add a
+  `## Revisions` entry. Nothing when the spec isn't pushed yet.
 
 ### 9.4 The helper
 

@@ -231,6 +231,20 @@ class CliTest(LintRepoTestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("tracker.system", result.stderr)
 
+    def test_only_reports_the_named_rules(self):
+        self.load_fixture("L006-fail")
+        other = self.run_shim("lint", "--only", "L011,L003", cwd=self.root)
+        self.assertEqual(other.returncode, 0, other.stdout + other.stderr)
+        named = self.run_shim("lint", "--only", "L006", cwd=self.root)
+        self.assertEqual(named.returncode, 1)
+        self.assertIn("L006", named.stdout)
+
+    def test_only_with_an_unknown_rule_exits_2(self):
+        self.load_fixture("L006-pass")
+        result = self.run_shim("lint", "--only", "L999", cwd=self.root)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("L999", result.stderr)
+
     def test_bad_base_ref_exits_2(self):
         self.copy_spec_dirs(LINT / "L001-pass" / "head")
         result = self.run_shim("lint", "--base", "no-such-ref", cwd=self.root, env=GIT_ENV)

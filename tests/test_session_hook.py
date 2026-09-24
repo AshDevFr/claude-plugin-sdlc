@@ -98,4 +98,4 @@ class RegistrationTest(unittest.TestCase):
         self.assertEqual(commands[0]["type"], "command")
         self.assertIn("${CLAUDE_PLUGIN_ROOT}/hooks/session-status.sh", commands[0]["command"])
         self.assertLessEqual(commands[0]["timeout"], 5)
-        self.assertEqual(set(config["hooks"]), {"SessionStart"})
+        self.assertEqual(set(config["hooks"]), {"SessionStart", "PostToolUse"})
