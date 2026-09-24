@@ -525,7 +525,7 @@ network:
 
 `tools/specs/specs` ships inside the plugin and runs from there; nothing is copied into product
 repositories. Its subcommands: `init`, `new`, `lint`, `intent check|record|assess`, `coverage`,
-`status`. It needs Python 3.10+ and PyYAML, makes no network calls, and exits 0 (nothing to
+`status`, `check`, `trailers`. It needs Python 3.10+ and PyYAML, makes no network calls, and exits 0 (nothing to
 report), 1 (findings) or 2 (usage or configuration problem, one line saying which).
 
 ---
