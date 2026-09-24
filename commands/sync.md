@@ -27,7 +27,8 @@ which spec and stop. Exit 2 from the helper: show its message and stop; never gu
 - **`changed`**: the intent moved since the spec recorded it. Go on.
 - **`unchanged`**: ask what brings the engineer here. If the spec turned out wrong while the
   intent is right (a criterion that can't be met, a design assumption that failed), go on with
-  the **spec wrong** path in Step 4. Otherwise there is nothing to sync: say so and stop.
+  the **spec wrong** path in Step 4. If they found something the intent never asked for, go to
+  **Scope found** below. Otherwise there is nothing to sync: say so and stop.
 - **`not recorded`**: the spec never stored its intent's hash. Offer to record it now, after
   the engineer confirms the spec reflects the current intent.
 - **`n/a`**: a spec with only a ticket; there's no intent file to sync against. Offer the spec
@@ -65,6 +66,8 @@ Then ask the engineer to choose, with your recommendation and its reason:
 
 - **No impact**: the intent was reworded or clarified; the spec still says the right thing.
 - **Impact**: the spec has to change.
+- **Scope found**: beyond this change, the engineer found something the intent doesn't ask
+  for; that goes to the intent's author first (below).
 
 Don't decide for them, and don't record anything before they've seen the diff and chosen.
 
@@ -112,3 +115,24 @@ body change without a revision entry. Then:
   the spec;
 - offer `/sdlc:commit-msg`, which writes the spec commit with the `Spec-Change` trailer.
   Nothing has been committed.
+
+## Scope found
+
+The engineer found work the intent didn't ask for: a case nobody mentioned, a system the
+change must touch, a constraint that turns out to matter. Widening the spec on their own
+authority would make the contract say something its author never agreed to, so the change goes
+to the intent's author first, as a draft they can accept or refuse.
+
+1. Ask what's missing and why it matters, in the engineer's words: what breaks or stays
+   unsolved if the intent stays as it is.
+2. Draft the proposed `intent.md` change, as a diff or a replacement paragraph in the
+   intent's own style and section, followed by the reason in two or three sentences, addressed
+   to the intent's author (the intent's `Author:` line names them).
+3. Print it for the engineer to pass on however they choose. If they ask to keep it, write it
+   to `<spec-dir>/intent-proposal.local.md`, which the `*.local.md` ignore rule keeps out of
+   git.
+4. Say what happens next: once the author edits `intent.md`, the status line and
+   `/sdlc:check` show the intent changed, and `/sdlc:sync` takes it as an impact change.
+
+**Never edit `intent.md` or `spec.md` on this path**, and send nothing anywhere: the draft is
+the engineer's to deliver.

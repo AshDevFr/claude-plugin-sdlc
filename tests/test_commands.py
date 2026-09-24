@@ -128,6 +128,11 @@ class SyncCommandTest(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertIn(f"Spec-Change: {kind}", self.text)
 
+    def test_found_scope_is_a_draft_for_the_intents_author(self):
+        self.assertIn("intent-proposal.local.md", self.text)
+        section = self.text[self.text.index("## Scope found") :]
+        self.assertIn("Never edit `intent.md`", section)
+
     def test_start_passes_supersedes_to_the_helper(self):
         start = (COMMANDS / "start.md").read_text(encoding="utf-8")
         self.assertRegex(start, r'specs" new [^\n]*--supersedes')
