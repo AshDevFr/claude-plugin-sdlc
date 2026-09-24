@@ -16,6 +16,8 @@ EXPECTED = {
     "start": True,
     "clarify": True,
     "check": True,
+    "commit-msg": True,
+    "pr-msg": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -65,6 +67,26 @@ class CheckCommandTest(unittest.TestCase):
         text = (COMMANDS / "check.md").read_text(encoding="utf-8")
         self.assertIn("couldn't check", text)
         self.assertIn("/sdlc:sync", text)
+
+
+class MessageCommandTest(unittest.TestCase):
+    def read(self, name: str) -> str:
+        return (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
+
+    def test_trailers_come_from_the_helper(self):
+        for name in ("commit-msg", "pr-msg"):
+            with self.subTest(command=name):
+                self.assertIn('tools/specs/specs" trailers', self.read(name))
+
+    def test_commit_msg_writes_the_message_despite_findings(self):
+        text = self.read("commit-msg")
+        self.assertIn('specs" check', text)
+        self.assertIn("anyway", text)
+
+    def test_pr_msg_uses_the_log_and_closes_only_with_a_ticket(self):
+        text = self.read("pr-msg")
+        self.assertIn("--from-log", text)
+        self.assertIn("Closes <ticket.ref>", text)
 
 
 class CheckerTest(unittest.TestCase):

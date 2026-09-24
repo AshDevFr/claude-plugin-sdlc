@@ -234,6 +234,22 @@ One line for the current branch's spec: `<id> r<revision>: <n> lint finding(s), 
 The spec is the one whose id appears in the branch name (the longest when several do), else
 the spec of the ticket the branch names. Always exits 0; fast enough for a status line.
 
+### `trailers`
+
+```sh
+tools/specs/specs trailers [<spec-dir>] [--implements AC-1,AC-3] [--spec-change <kind>] [--from-log <base>]
+```
+
+The git trailers that tie a commit or PR to a spec, one per line, ready to append to a message:
+`Spec: <id>@r<revision>`, then `Implements:` and `Spec-Change:` when they apply. Without a
+directory, the current branch's spec. Exits 1 naming a criterion that doesn't exist or is
+struck, or a kind other than `initial`, `clarify`, `amend`, `acknowledge`, `supersede`.
+
+`--from-log <base>` adds the criteria in the `Implements:` trailers of the `<base>..HEAD`
+commits whose `Spec:` names this spec, oldest first, each once: the PR's "criteria implemented".
+A criterion struck since the commit is left out with a warning, since the trailers speak for the
+current revision.
+
 ## Development
 
 From the repository root:

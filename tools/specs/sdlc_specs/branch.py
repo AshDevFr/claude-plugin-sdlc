@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 from .config import Config
-from .errors import CheckFailed
+from .errors import CheckFailed, UsageError
 from .keys import Keys
 
 
@@ -40,3 +40,18 @@ def spec_for_branch(root: Path, config: Config, branch: str) -> Path | None:
         return Keys(config, root).find_spec_dir(key)
     except CheckFailed:
         return None  # two specs for one ticket: lint reports it; a status line shouldn't guess
+
+
+def spec_dir_arg(root: Path, config: Config, raw: str | None) -> Path:
+    """The spec directory a command was given (a spec.md path counts), else the branch's spec."""
+    if raw is not None:
+        path = Path(raw).resolve()
+        path = path.parent if path.is_file() else path
+        if not (path / "spec.md").is_file():
+            raise UsageError(f"{raw}: not a spec directory")
+        return path
+    branch = current_branch(root)
+    found = spec_for_branch(root, config, branch) if branch else None
+    if found is None:
+        raise UsageError("no spec for this branch; pass SPEC_DIR")
+    return found
