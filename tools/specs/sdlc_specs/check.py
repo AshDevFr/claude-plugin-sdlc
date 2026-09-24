@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import cli
-from .branch import current_branch, spec_for_branch
+from .branch import spec_dir_arg
 from .config import Config
 from .coverage import citations, coverage_of, test_files
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
@@ -26,21 +26,13 @@ _OWN_REASON = {"L008": "open questions", "L017": "template text", "L016": "inten
 
 def _spec_dirs(root: Path, config: Config, args: argparse.Namespace) -> list[Path]:
     if args.paths:
-        dirs = []
-        for raw in args.paths:
-            path = Path(raw).resolve()
-            path = path.parent if path.is_file() else path
-            if not (path / "spec.md").is_file():
-                raise UsageError(f"{raw}: not a spec directory")
-            dirs.append(path)
-        return dirs
+        return [spec_dir_arg(root, config, raw) for raw in args.paths]
     if args.all:
         return sorted(p for p in _all_spec_dirs(config.specs_path(root)) if (p / "spec.md").is_file())
-    branch = current_branch(root)
-    found = spec_for_branch(root, config, branch) if branch else None
-    if found is None:
-        raise UsageError("no spec for this branch; pass SPEC_DIR, or --all for every spec")
-    return [found]
+    try:
+        return [spec_dir_arg(root, config, None)]
+    except UsageError as err:
+        raise UsageError(f"{err.message}, or --all for every spec") from None
 
 
 def _intent_state(spec_dir: Path) -> str:
