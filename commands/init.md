@@ -92,23 +92,26 @@ directory chosen:
 /specs/ @org/spec-approvers
 ```
 
-**Re-approval when a spec changes.** Print only the section for the configured code host.
-
-For **GitHub** (`CODEOWNERS` in `.github/`, the root or `docs/`), in the branch protection rule or
-ruleset for the default branch:
-
-- "Require a pull request before merging", with "Require review from Code Owners".
-- Dismiss stale approvals: "Dismiss stale pull request approvals when new commits are pushed".
+**Re-approval when a spec changes.** Print only the section for the configured code host. The
+aim: a push of code keeps the spec approval, and an edit to the spec resets it.
 
 For **GitLab** (`CODEOWNERS` in `.gitlab/`, the root or `docs/`):
 
-- Settings > Merge requests > Approval settings: "Remove all approvals when commits are added to
-  the source branch".
 - Settings > Repository > Protected branches: turn on "Code owner approval" for the default
-  branch. This needs GitLab Premium or above; without it, the approval rule is a convention.
+  branch.
+- Settings > Merge requests > Approval settings: turn on
+  "Remove approvals by Code Owners if their files changed", and leave
+  "Remove all approvals when commits are added to the source branch" off. Only the spec
+  reviewers' approvals reset, and only when the spec changes.
+- Both settings need GitLab Premium or above; without them, spec approval is a convention.
 
-Both settings reset approval on any new commit, not only on commits that change a spec. That's
-coarser than needed, and the simplest thing the hosts offer.
+For **GitHub** (`CODEOWNERS` in `.github/`, the root or `docs/`), in the branch protection rule
+or ruleset for the default branch:
+
+- "Require a pull request before merging", with "Require review from Code Owners".
+- GitHub can't reset approvals per path, so the team chooses. Either turn on
+  "Dismiss stale pull request approvals when new commits are pushed": a spec edit resets the
+  approval, but so does every code push. Or leave it off and have reviewers check spec diffs.
 
 Finish by suggesting `/sdlc:start` to write the first spec, and remind the user that nothing has
 been committed.
