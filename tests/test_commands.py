@@ -20,6 +20,7 @@ EXPECTED = {
     "pr-msg": True,
     "analyze": True,
     "propose": True,
+    "sync": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -106,6 +107,30 @@ class ProposeCommandTest(unittest.TestCase):
         self.assertIn("Draft: Spec for", text)
         self.assertIn("--spec-change initial", text)
         self.assertIn("/sdlc:sync", text)
+
+
+class SyncCommandTest(unittest.TestCase):
+    def setUp(self):
+        self.text = (COMMANDS / "sync.md").read_text(encoding="utf-8")
+
+    def test_the_diff_is_shown_before_the_hash_is_recorded(self):
+        # Recording the hash says someone checked the spec against this intent.
+        diff = self.text.index("intent check --diff")
+        record = self.text.index("intent record")
+        self.assertLess(diff, record)
+
+    def test_a_merged_spec_is_superseded_not_edited(self):
+        self.assertIn("git cat-file -e", self.text)
+        self.assertIn("--supersedes", self.text)
+
+    def test_resolutions_carry_their_kinds(self):
+        for kind in ("acknowledge", "amend"):
+            with self.subTest(kind=kind):
+                self.assertIn(f"Spec-Change: {kind}", self.text)
+
+    def test_start_passes_supersedes_to_the_helper(self):
+        start = (COMMANDS / "start.md").read_text(encoding="utf-8")
+        self.assertRegex(start, r'specs" new [^\n]*--supersedes')
 
 
 class CheckerTest(unittest.TestCase):
