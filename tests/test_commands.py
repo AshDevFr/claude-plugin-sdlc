@@ -19,6 +19,7 @@ EXPECTED = {
     "commit-msg": True,
     "pr-msg": True,
     "analyze": True,
+    "propose": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -96,6 +97,15 @@ class AnalyzeCommandTest(unittest.TestCase):
         self.assertIn("read-only", text)
         self.assertIn('specs" --json check', text)
         self.assertIn("intent", text)
+
+
+class ProposeCommandTest(unittest.TestCase):
+    def test_propose_checks_readiness_and_prints_draft_text(self):
+        text = (COMMANDS / "propose.md").read_text(encoding="utf-8")
+        self.assertIn("check --ready", text)
+        self.assertIn("Draft: Spec for", text)
+        self.assertIn("--spec-change initial", text)
+        self.assertIn("/sdlc:sync", text)
 
 
 class CheckerTest(unittest.TestCase):
