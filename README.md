@@ -43,6 +43,7 @@ In the order a change usually meets them:
 | Command | What it does |
 |---|---|
 | `/sdlc:init` | Once per repository: config, templates, `.gitignore` entry, `CLAUDE.md` section; prints the code owner and code host settings to apply |
+| `/sdlc:intent` | Writes the intent with whoever has the problem, before any spec: an interview in their words, one file |
 | `/sdlc:start` | Turns a request (an `intent.md`, a file, pasted text) into a spec: assesses the intent, offers help with its gaps, drafts `spec.md` |
 | `/sdlc:clarify` | Works a spec's open questions down to decisions, one question at a time |
 | `/sdlc:analyze` | Read-only review of a spec against itself and its intent |
