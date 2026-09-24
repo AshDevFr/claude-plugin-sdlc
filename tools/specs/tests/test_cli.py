@@ -1,7 +1,10 @@
+import ast
 import json
+import runpy
 import socket
+import sys
 
-from tests.base import TOOL_DIR, NetworkBlocked, OfflineTestCase
+from tests.base import SHIM, TOOL_DIR, NetworkBlocked, OfflineTestCase
 
 
 class VersionTest(OfflineTestCase):
@@ -123,3 +126,42 @@ class SocketGuardTest(OfflineTestCase):
         result = self.run_cli("_test-net")
         self.assertEqual(result.returncode, 2)
         self.assertIn("tests must not open network sockets", result.stderr)
+
+
+class PreflightTest(OfflineTestCase):
+    """The shim checks its environment before importing anything that needs it."""
+
+    def run_without_site_packages(self, *args):
+        # -S skips site-packages, so PyYAML is unimportable while the stdlib still works.
+        return self._run([sys.executable, "-S", str(SHIM), *args], cwd=None, env=None)
+
+    def test_missing_pyyaml_is_one_line_and_exit_2(self):
+        for argv in (["--version"], ["lint"]):
+            with self.subTest(argv=argv):
+                result = self.run_without_site_packages(*argv)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(
+                    result.stderr.strip().splitlines(),
+                    ["specs: PyYAML is not installed (pip install pyyaml)"],
+                )
+
+    def test_missing_pyyaml_with_json_still_emits_one_document(self):
+        result = self.run_without_site_packages("--json", "lint")
+        self.assertEqual(result.returncode, 2)
+        doc = json.loads(result.stdout)
+        self.assertEqual(doc["ok"], False)
+        self.assertEqual(doc["error"]["code"], 2)
+        self.assertIn("PyYAML", doc["error"]["message"])
+
+    def test_old_python_is_named(self):
+        preflight = runpy.run_path(str(SHIM), run_name="preflight_check")["preflight"]
+        self.assertEqual(preflight((3, 9, 7, "final", 0)), "specs: needs Python 3.10 or newer, found 3.9.7")
+        self.assertIsNone(preflight(sys.version_info))
+
+    def test_shim_parses_without_modern_syntax(self):
+        # The guard only helps if an old interpreter can parse the file it lives in.
+        tree = ast.parse(SHIM.read_text(), feature_version=(3, 4))
+        self.assertFalse(
+            [n for n in ast.walk(tree) if isinstance(n, ast.JoinedStr)], "no f-strings in the shim"
+        )
