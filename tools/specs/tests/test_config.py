@@ -35,11 +35,8 @@ class ValidConfigTest(RepoTestCase):
         self.assertEqual(config.tracker_system, "github")
         self.assertIsNone(config.tracker_project)
         self.assertIsNone(config.tracker_team_key)
-        self.assertIsNone(config.tracker_base_url)
-        self.assertIsNone(config.tracker_fake_of)
         self.assertEqual(config.spec_label, "spec-required")
         self.assertEqual(config.host_system, "github")
-        self.assertIsNone(config.host_base_url)
         self.assertEqual(config.spec_approvers, "@acme/spec-approvers")
         self.assertEqual(config.specs_dir, "specs")
         self.assertEqual(config.test_globs, DEFAULT_TEST_GLOBS)
@@ -49,9 +46,7 @@ class ValidConfigTest(RepoTestCase):
         self.install("full-gitlab.yml")
         _, config = load_config(self.root)
         self.assertEqual(config.tracker_project, "billing/api")
-        self.assertEqual(config.tracker_base_url, "https://gitlab.example.com")
         self.assertEqual(config.spec_label, "needs-spec")
-        self.assertEqual(config.host_base_url, "https://gitlab.example.com")
         self.assertEqual(config.spec_approvers, ["alice", "bob"])
         self.assertEqual(config.test_globs, ["tests/**"])
 
@@ -60,18 +55,11 @@ class ValidConfigTest(RepoTestCase):
         _, config = load_config(self.root)
         self.assertEqual(config.tracker_team_key, "ENG")
 
-    def test_fake_systems_need_only_fake_of_and_approvers(self):
-        self.install("fake.yml")
+    def test_spec_approvers_are_optional(self):
+        # Only used to suggest a CODEOWNERS entry, so a repo may leave them out.
+        self.install("no-approvers.yml")
         _, config = load_config(self.root)
-        self.assertEqual(config.tracker_system, "fake")
-        self.assertEqual(config.tracker_fake_of, "github")
-        self.assertEqual(config.host_system, "fake")
-
-    def test_fake_linear_validates_as_linear(self):
-        self.install("fake-linear.yml")
-        _, config = load_config(self.root)
-        self.assertEqual(config.tracker_fake_of, "linear")
-        self.assertEqual(config.tracker_team_key, "ENG")
+        self.assertIsNone(config.spec_approvers)
 
     def test_config_found_from_a_subdirectory(self):
         self.install("minimal.yml")
@@ -117,17 +105,12 @@ class InvalidConfigTest(RepoTestCase):
     # fixture -> text that must appear in the error after "specs/config.yml: "
     CASES = {
         "linear-missing-team-key.yml": "tracker.team_key",
-        "fake-linear-missing-team-key.yml": "tracker.team_key",
-        "fake-missing-fake-of.yml": "tracker.fake_of",
-        "fake-of-on-real-tracker.yml": "tracker.fake_of",
         "unknown-key.yml": "tracker.sytem",
         "unknown-top-level-key.yml": "test_globs",
         "unknown-tracker-system.yml": "tracker.system",
         "unknown-host-system.yml": "code_host.system",
         "project-on-linear.yml": "tracker.project",
         "team-key-on-gitlab.yml": "tracker.team_key",
-        "base-url-on-fake-host.yml": "code_host.base_url",
-        "missing-approvers.yml": "code_host.spec_approvers",
         "approvers-not-a-group.yml": "code_host.spec_approvers",
         "approvers-empty-list.yml": "code_host.spec_approvers",
         "missing-tracker.yml": "tracker",
@@ -146,6 +129,22 @@ class InvalidConfigTest(RepoTestCase):
                     ctx.exception.message.startswith(f"specs/config.yml: {field}:"),
                     ctx.exception.message,
                 )
+
+    def test_platform_keys_are_unknown(self):
+        # Nothing calls a platform API, so these keys have no meaning left.
+        cases = {
+            "tracker-base-url.yml": "tracker.base_url: unknown key",
+            "host-base-url.yml": "code_host.base_url: unknown key",
+            "fake-of.yml": "tracker.fake_of: unknown key",
+            "fake-tracker.yml": "tracker.system: must be one of gitlab, github, linear",
+            "fake-host.yml": "code_host.system: must be one of gitlab, github",
+        }
+        for fixture, expected in cases.items():
+            with self.subTest(fixture=fixture):
+                self.install(fixture)
+                with self.assertRaises(ConfigError) as ctx:
+                    load_config(self.root)
+                self.assertIn(f"specs/config.yml: {expected}", ctx.exception.message)
 
     def test_stray_field_message_names_the_system(self):
         self.install("project-on-linear.yml")

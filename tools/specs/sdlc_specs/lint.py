@@ -251,7 +251,7 @@ class _SpecLinter:
         ticket = fm.get("ticket")
         if not isinstance(ticket, dict) or "system" not in ticket:
             return
-        expected = self.config.tracker_kind
+        expected = self.config.tracker_system
         if ticket["system"] != expected:
             self.add(
                 "L004",

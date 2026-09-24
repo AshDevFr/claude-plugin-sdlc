@@ -1,6 +1,6 @@
 tracker:
   system: github
 code_host:
-  system: fake
-  base_url: https://example.com
+  system: github
+  base_url: https://ghe.example.com
   spec_approvers: "@acme/spec-approvers"

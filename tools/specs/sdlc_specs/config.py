@@ -18,42 +18,32 @@ SPECS_DIR_CANDIDATES = ("specs", ".specs")
 
 TRACKER_SYSTEMS = ("gitlab", "github", "linear")
 HOST_SYSTEMS = ("gitlab", "github")
-FAKE = "fake"
 
 DEFAULT_SPEC_LABEL = "spec-required"
 DEFAULT_TEST_GLOBS = ["**/test*/**", "**/*_test.*", "**/*.test.*", "**/*.spec.*"]
 
 # Fields that only mean something for some systems. Anything else in the section is unknown.
 _TRACKER_FIELDS_BY_SYSTEM = {
-    "gitlab": {"project", "base_url"},
-    "github": {"project", "base_url"},
+    "gitlab": {"project"},
+    "github": {"project"},
     "linear": {"team_key"},
 }
-_TRACKER_COMMON = {"system", "fake_of", "spec_label"}
-_HOST_FIELDS_BY_SYSTEM = {"gitlab": {"base_url"}, "github": {"base_url"}, FAKE: set()}
-_HOST_COMMON = {"system", "spec_approvers"}
+_TRACKER_COMMON = {"system", "spec_label"}
+_HOST_FIELDS = {"system", "spec_approvers"}
 _TOP_LEVEL = {"tracker", "code_host", "specs_dir", "coverage"}
 _COVERAGE = {"test_globs"}
 
 
 @dataclass(frozen=True)
 class Config:
-    tracker_system: str  # gitlab | github | linear | fake
-    tracker_fake_of: str | None  # the system a fake tracker behaves as; None unless fake
+    tracker_system: str  # gitlab | github | linear
     tracker_project: str | None  # gitlab/github: "group/project"; None = the code host repo
     tracker_team_key: str | None  # linear
-    tracker_base_url: str | None  # self-hosted GitLab / GitHub Enterprise
     spec_label: str
-    host_system: str  # gitlab | github | fake
-    host_base_url: str | None
-    spec_approvers: str | list[str]  # "@group" or ["user", ...]
+    host_system: str  # gitlab | github
+    spec_approvers: str | list[str] | None  # "@group" or ["user", ...]; only suggests CODEOWNERS
     specs_dir: str
     test_globs: list[str]
-
-    @property
-    def tracker_kind(self) -> str:
-        """The system whose rules apply: the real one, or the one a fake tracker mimics."""
-        return self.tracker_fake_of or self.tracker_system
 
     def specs_path(self, root: Path) -> Path:
         return root / self.specs_dir
@@ -147,24 +137,12 @@ class _Validator:
         # Tracker: reject keys no system knows before blaming the selected system.
         all_tracker = _TRACKER_COMMON.union(*_TRACKER_FIELDS_BY_SYSTEM.values())
         self.unknown_keys(tracker, all_tracker, "tracker.")
-        system = self.choice(tracker, "system", "tracker.system", (*TRACKER_SYSTEMS, FAKE))
-        if system == FAKE:
-            fake_of = self.choice(tracker, "fake_of", "tracker.fake_of", TRACKER_SYSTEMS)
-        elif "fake_of" in tracker:
-            self.fail("tracker.fake_of", f"only valid when tracker.system is {FAKE} (got {system!r})")
-        else:
-            fake_of = None
-        kind = fake_of or system
-        self.not_for_system(tracker, _TRACKER_COMMON | _TRACKER_FIELDS_BY_SYSTEM[kind], "tracker.", kind)
-        team_key = self.string(tracker, "team_key", "tracker.team_key", required=kind == "linear")
+        system = self.choice(tracker, "system", "tracker.system", TRACKER_SYSTEMS)
+        self.not_for_system(tracker, _TRACKER_COMMON | _TRACKER_FIELDS_BY_SYSTEM[system], "tracker.", system)
+        team_key = self.string(tracker, "team_key", "tracker.team_key", required=system == "linear")
 
-        # Code host.
-        all_host = _HOST_COMMON.union(*_HOST_FIELDS_BY_SYSTEM.values())
-        self.unknown_keys(host, all_host, "code_host.")
-        host_system = self.choice(host, "system", "code_host.system", (*HOST_SYSTEMS, FAKE))
-        self.not_for_system(
-            host, _HOST_COMMON | _HOST_FIELDS_BY_SYSTEM[host_system], "code_host.", host_system
-        )
+        self.unknown_keys(host, _HOST_FIELDS, "code_host.")
+        host_system = self.choice(host, "system", "code_host.system", HOST_SYSTEMS)
 
         # specs_dir defaults to where the config was found and may not point elsewhere, or
         # the checks would scan a directory other than the one holding the specs.
@@ -178,22 +156,19 @@ class _Validator:
 
         return Config(
             tracker_system=system,
-            tracker_fake_of=fake_of,
             tracker_project=self.string(tracker, "project", "tracker.project"),
             tracker_team_key=team_key,
-            tracker_base_url=self.string(tracker, "base_url", "tracker.base_url"),
             spec_label=self.string(tracker, "spec_label", "tracker.spec_label") or DEFAULT_SPEC_LABEL,
             host_system=host_system,
-            host_base_url=self.string(host, "base_url", "code_host.base_url"),
             spec_approvers=self.approvers(host),
             specs_dir=specs_dir,
             test_globs=self.test_globs(coverage),
         )
 
-    def approvers(self, host: dict) -> str | list[str]:
+    def approvers(self, host: dict) -> str | list[str] | None:
         field = "code_host.spec_approvers"
         if host.get("spec_approvers") is None:
-            self.fail(field, 'required: a group such as "@org/spec-approvers", or a list of usernames')
+            return None
         value: Any = host["spec_approvers"]
         if isinstance(value, str):
             if not value.startswith("@") or len(value) < 2:

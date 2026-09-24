@@ -88,7 +88,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     text = render_spec(
         spec_id,
         args.title,
-        config.tracker_kind,
+        config.tracker_system,
         key.ref(),
         [args.supersedes] if args.supersedes else [],
         _author(root),

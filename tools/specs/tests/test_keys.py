@@ -10,16 +10,13 @@ from sdlc_specs.keys import Keys, TicketKey, parse_remote_url, slugify
 from tests.base import OfflineTestCase
 
 
-def make_config(system: str, project: str | None = None, fake_of: str | None = None) -> Config:
+def make_config(system: str, project: str | None = None) -> Config:
     return Config(
         tracker_system=system,
-        tracker_fake_of=fake_of,
         tracker_project=project,
-        tracker_team_key="ENG" if (fake_of or system) == "linear" else None,
-        tracker_base_url=None,
+        tracker_team_key="ENG" if system == "linear" else None,
         spec_label="spec-required",
         host_system="github",
-        host_base_url=None,
         spec_approvers="@acme/spec-approvers",
         specs_dir="specs",
         test_globs=list(DEFAULT_TEST_GLOBS),
@@ -33,8 +30,8 @@ class TempRepoTestCase(OfflineTestCase):
         self.addCleanup(shutil.rmtree, self.root)
         (self.root / ".git").mkdir()
 
-    def keys(self, system: str, project: str | None = None, fake_of: str | None = None) -> Keys:
-        return Keys(make_config(system, project, fake_of), self.root)
+    def keys(self, system: str, project: str | None = None) -> Keys:
+        return Keys(make_config(system, project), self.root)
 
 
 class DirectoryNameTest(TempRepoTestCase):
@@ -97,12 +94,6 @@ class ParseTest(TempRepoTestCase):
             self.keys("linear").parse("#123")
         with self.assertRaises(UsageError):
             self.keys("gitlab").parse("ENG-123")
-
-    def test_fake_tracker_parses_like_the_system_it_mimics(self):
-        self.assertEqual(self.keys("fake", fake_of="linear").parse("ENG-1").ref(), "ENG-1")
-        with self.assertRaises(UsageError):
-            self.keys("fake", fake_of="linear").parse("#1")
-        self.assertEqual(self.keys("fake", fake_of="gitlab").parse("#1").ref(), "#1")
 
     def test_malformed_refs(self):
         host = self.keys("gitlab", project="billing/api")

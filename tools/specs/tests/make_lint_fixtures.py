@@ -106,16 +106,19 @@ fixture(
     needle="id: 123-another-name",
 )
 
-# L004: a fake tracker mimicking gitlab takes specs that say gitlab
-FAKE = """tracker:
-  system: fake
-  fake_of: gitlab
-  project: billing/api
+# L004: a Linear spec under a Linear config passes; a spec naming another system fails
+LINEAR = """tracker:
+  system: linear
+  team_key: ENG
 code_host:
-  system: fake
-  spec_approvers: "@acme/spec-approvers"
+  system: github
 """
-fixture("L004-pass", SPEC, config=FAKE)
+linear_name = "eng-123-prorate-plan-changes"
+linear_spec = replace(SPEC, f"id: {NAME}", f"id: {linear_name}")
+linear_spec = replace(linear_spec, "system: gitlab ", "system: linear ")
+linear_spec = replace(linear_spec, "ref: billing/api#123 ", "ref: ENG-123         ")
+linear_snapshot = SNAPSHOT.replace("ticket: billing/api#123 ", "ticket: ENG-123 ")
+fixture("L004-pass", linear_spec, config=LINEAR, name=linear_name, snapshot=linear_snapshot)
 fixture(
     "L004-fail", replace(SPEC, "system: gitlab ", "system: github "), rule="L004", needle="system: github"
 )

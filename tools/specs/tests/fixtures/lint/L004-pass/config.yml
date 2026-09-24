@@ -1,7 +1,5 @@
 tracker:
-  system: fake
-  fake_of: gitlab
-  project: billing/api
+  system: linear
+  team_key: ENG
 code_host:
-  system: fake
-  spec_approvers: "@acme/spec-approvers"
+  system: github

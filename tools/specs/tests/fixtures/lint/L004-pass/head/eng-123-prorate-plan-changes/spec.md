@@ -1,9 +1,9 @@
 ---
-id: 123-prorate-plan-changes
+id: eng-123-prorate-plan-changes
 title: Prorate plan changes mid-cycle
 ticket:
-  system: gitlab                     # gitlab | github | linear
-  ref: billing/api#123               # or org/repo#123, or ENG-123
+  system: linear                     # gitlab | github | linear
+  ref: ENG-123                       # or org/repo#123, or ENG-123
   url: https://gitlab.example.com/billing/api/-/issues/123
   snapshot:
     content_sha256: 5cee61d26ee90c1b7d0fb397ba26f6857b0c91b1c4e275b1a0a89d304ff477d3 # sha256 of normalised title + description

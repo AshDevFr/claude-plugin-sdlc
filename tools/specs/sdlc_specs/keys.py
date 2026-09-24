@@ -89,7 +89,7 @@ class Keys:
     def __init__(self, config: Config, root: Path):
         self.config = config
         self.root = root
-        self.kind = config.tracker_kind
+        self.kind = config.tracker_system
 
     @cached_property
     def home_project(self) -> str | None:

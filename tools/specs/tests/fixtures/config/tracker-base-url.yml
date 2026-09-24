@@ -1,0 +1,6 @@
+tracker:
+  system: gitlab
+  base_url: https://gitlab.example.com
+code_host:
+  system: gitlab
+  spec_approvers: "@acme/spec-approvers"
