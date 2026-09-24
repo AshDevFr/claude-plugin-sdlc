@@ -98,6 +98,7 @@ class Finding:
 class LintOptions:
     ready: bool = False
     base: str | None = None
+    only: frozenset[str] | None = None  # report only these rules
 
 
 # Sections whose template text may rightly stay: no questions, no decisions yet, the r1 entry.
@@ -603,7 +604,19 @@ def lint(root: Path, config: Config, spec_dirs: list[Path], options: LintOptions
     findings: list[Finding] = []
     for spec_dir in spec_dirs:
         findings += _SpecLinter(spec_dir.resolve(), root.resolve(), config, keys, options, guidance).run()
+    if options.only is not None:
+        findings = [f for f in findings if f.rule in options.only]
     return sorted(findings, key=lambda f: (f.path, f.line if f.line is not None else 0, f.rule))
+
+
+def _only(raw: str | None) -> frozenset[str] | None:
+    if raw is None:
+        return None
+    rules = frozenset(r.strip().upper() for r in raw.split(",") if r.strip())
+    unknown = sorted(rules - RULES.keys())
+    if unknown or not rules:
+        raise UsageError(f"--only: unknown rule {', '.join(unknown) or '(none given)'}")
+    return rules
 
 
 def _configure(parser: argparse.ArgumentParser) -> None:
@@ -615,12 +628,14 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--base", metavar="REF", help="compare with the spec at REF (removed ACs, revision bumps)"
     )
+    parser.add_argument("--only", metavar="RULE[,RULE]", help="report only these rules, e.g. L011")
 
 
 @cli.command("lint", help="check specs against the spec rules", configure=_configure, needs_config=True)
 def run(args: argparse.Namespace, out: Output) -> cli.Result:
     spec_dirs = select_spec_dirs(args.repo_root, args.config, args.paths, args.changed_since)
-    findings = lint(args.repo_root, args.config, spec_dirs, LintOptions(ready=args.ready, base=args.base))
+    options = LintOptions(ready=args.ready, base=args.base, only=_only(args.only))
+    findings = lint(args.repo_root, args.config, spec_dirs, options)
     for finding in findings:
         out.print(finding.render())
     count = len(spec_dirs)

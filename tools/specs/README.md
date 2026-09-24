@@ -111,7 +111,7 @@ reported `customised`, with its diff, and left alone. It never writes `CODEOWNER
 ### `lint`
 
 ```sh
-tools/specs/specs lint [paths...] [--changed-since REF] [--ready] [--base REF]
+tools/specs/specs lint [paths...] [--changed-since REF] [--ready] [--base REF] [--only RULE[,RULE]]
 ```
 
 Checks spec directories against the rules below. With no paths, every directory under the specs
@@ -122,6 +122,7 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 | `--changed-since REF` | Only spec directories with a file changed since `REF` (committed, uncommitted or untracked) |
 | `--ready` | Also apply the rules for a spec that is out of draft (`L008`) |
 | `--base REF` | Compare each spec with its version at `REF` (`L007`, `L011`); a spec absent at `REF` is skipped |
+| `--only RULE[,RULE]` | Report only these rules (the revision reminder hook uses `--only L011`); an unknown rule exits 2 |
 
 | Rule | Checks |
 |---|---|
