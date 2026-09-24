@@ -71,6 +71,47 @@ On any error:
 {"ok": false, "error": {"code": 2, "message": "..."}}
 ```
 
+## Commands
+
+### `lint`
+
+```sh
+tools/specs/specs lint [paths...] [--changed-since REF] [--ready] [--base REF]
+```
+
+Checks spec directories against the rules below. With no paths, every directory under the specs
+directory. Findings print as `path:line: RULE message` on stdout; exit 1 if there are any.
+
+| Option | Effect |
+|---|---|
+| `--changed-since REF` | Only spec directories with a file changed since `REF` (committed, uncommitted or untracked) |
+| `--ready` | Also apply the rules for a spec that is out of draft (`L008`) |
+| `--base REF` | Compare each spec with its version at `REF` (`L007`, `L011`); a spec absent at `REF` is skipped |
+
+| Rule | Checks |
+|---|---|
+| `L001` | `spec.md` exists and its frontmatter parses |
+| `L002` | Required frontmatter fields and types; no unknown fields; no `approved`, `approvers`, `pr` or `status` |
+| `L003` | `id` equals the directory name; the directory name starts with the `ticket.ref` prefix |
+| `L004` | `ticket.system` matches the configured tracker (for a fake tracker, the system it mimics) |
+| `L005` | All template sections present, in any order |
+| `L006` | `AC-n` numbers unique; at least one criterion not struck |
+| `L007` | With `--base`: no criterion removed (strike it through instead) |
+| `L008` | With `--ready`: no open questions |
+| `L009` | Every `attachments` entry exists inside the spec directory |
+| `L010` | `ticket.snapshot.md` exists, is unedited, and matches `ticket.snapshot.content_sha256` |
+| `L011` | With `--base`: a changed body bumps `revision` and adds a matching `## Revisions` entry |
+| `L012` | `state: superseded` requires `superseded_by` |
+| `L013` | A line that looks like an acceptance criterion but isn't one (wrong form, wrong section, in a code block) |
+
+JSON output:
+
+```json
+{"ok": false, "findings": [{"rule": "L006", "path": "specs/123-x/spec.md", "line": 14, "message": "..."}]}
+```
+
+`line` is `null` when a finding has no line (a missing `spec.md`).
+
 ## Development
 
 From the repository root:
