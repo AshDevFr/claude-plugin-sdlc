@@ -175,6 +175,18 @@ template's guidance) or `ok`, plus the title and Author line, and lists the open
 `specs/templates/intent.md` when it has one. It always exits 0: gaps are for the plugin to
 offer help with, never a failure.
 
+### `coverage`
+
+```sh
+tools/specs/specs coverage [<spec-dir>...]
+```
+
+Reports, per spec, which non-struck acceptance criteria are cited by a test file, as
+`<spec-id>:AC-<n>` anywhere in a line, and where. Test files are those git would show (tracked,
+or untracked and not ignored) matching `coverage.test_globs`; `**/` spans directories, `*`
+stays within one. Citations of a struck or nonexistent criterion are listed separately. Exits
+1 when a criterion is uncited: advice that a test may be missing, not proof either way.
+
 ## Development
 
 From the repository root:
