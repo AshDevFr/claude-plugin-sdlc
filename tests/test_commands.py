@@ -18,6 +18,7 @@ EXPECTED = {
     "check": True,
     "commit-msg": True,
     "pr-msg": True,
+    "analyze": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -87,6 +88,14 @@ class MessageCommandTest(unittest.TestCase):
         text = self.read("pr-msg")
         self.assertIn("--from-log", text)
         self.assertIn("Closes <ticket.ref>", text)
+
+
+class AnalyzeCommandTest(unittest.TestCase):
+    def test_analyze_is_read_only_and_builds_on_the_check(self):
+        text = (COMMANDS / "analyze.md").read_text(encoding="utf-8")
+        self.assertIn("read-only", text)
+        self.assertIn('specs" --json check', text)
+        self.assertIn("intent", text)
 
 
 class CheckerTest(unittest.TestCase):
