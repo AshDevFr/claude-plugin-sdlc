@@ -23,6 +23,7 @@ EXPECTED = {
     "sync": True,
     "converge": True,
     "handoff": True,
+    "plan": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -156,6 +157,15 @@ class HandoffCommandTest(unittest.TestCase):
         self.assertIn("handoff.local.md", text)
         self.assertIn("## Resume", text)
         self.assertIn("@{upstream}..HEAD", text)
+
+
+class PlanCommandTest(unittest.TestCase):
+    def test_plan_stays_local_unless_committed_on_purpose(self):
+        text = (COMMANDS / "plan.md").read_text(encoding="utf-8")
+        self.assertIn("plan.local.md", text)
+        self.assertIn("git check-ignore", text)
+        self.assertIn("--commit", text)
+        self.assertIn("skills/spec-template/plan.md", text)
 
 
 class CheckerTest(unittest.TestCase):

@@ -159,3 +159,13 @@ class FinishingWorkTest(unittest.TestCase):
         for pattern in (r"\bCI\b", r"pipeline", r"worktree", r"\bAPI\b", r"\.specs"):
             with self.subTest(pattern=pattern):
                 self.assertIsNone(re.search(pattern, body))
+
+
+class PlanTemplateTest(unittest.TestCase):
+    def test_steps_name_their_criteria_and_a_map_covers_them(self):
+        text = (SKILLS / "spec-template" / "plan.md").read_text(encoding="utf-8")
+        self.assertIn("<spec-id>:AC-", text)
+        self.assertIn("## Criteria map", text)
+        self.assertIn("Test first", text)
+        _, body = read("spec-template")
+        self.assertIn("plan.md", body)
