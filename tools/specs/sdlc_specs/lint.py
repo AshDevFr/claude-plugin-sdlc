@@ -17,7 +17,7 @@ from .config import Config
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
 from .keys import Keys
 from .output import Output
-from .snapshot import content_sha256, parse_snapshot_file
+from .snapshot import content_sha256, intent_sha256, parse_snapshot_file
 from .spec import AC_SECTION, REVISIONS_SECTION, SpecParseError, parse_spec_text
 
 SPEC_FILE = "spec.md"
@@ -40,6 +40,7 @@ RULES = {
     "L013": "Acceptance-criterion-like lines that are not canonical criteria",
     "L014": "The spec names its intent: an intent block, a ticket, or both",
     "L015": "The intent file named by intent.file exists in the spec directory",
+    "L016": "The intent file has not changed since the spec recorded its hash",
 }
 
 REQUIRED_SECTIONS = (
@@ -321,6 +322,14 @@ class _SpecLinter:
                 self.line_of("intent.file"),
                 f"intent file '{name}' does not exist in the spec directory",
             )
+        elif isinstance(intent.get("content_sha256"), str) and _SHA.match(intent["content_sha256"]):
+            current = intent_sha256((self.dir / name).read_text(encoding="utf-8"))
+            if current != intent["content_sha256"]:
+                self.add(
+                    "L016",
+                    self.line_of("intent.content_sha256"),
+                    f"{name} changed since the spec recorded it: review the spec with /sdlc:sync",
+                )
 
     # L004
     def system(self, fm: dict[str, Any]) -> None:

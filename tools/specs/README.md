@@ -107,6 +107,7 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 | `L013` | A line that looks like an acceptance criterion but isn't one (wrong form, wrong section, in a code block) |
 | `L014` | The spec names its intent: an `intent` block, a `ticket`, or both |
 | `L015` | The file named by `intent.file` exists in the spec directory |
+| `L016` | The intent file hasn't changed since the spec recorded its hash (otherwise: `/sdlc:sync`) |
 
 JSON output:
 
@@ -150,6 +151,22 @@ With `--supersedes <id>`, the new spec lists `<id>` under `supersedes`, and the 
 unchanged.
 
 JSON output: `{"ok": true, "path": "specs/2026-09-23-webhook-retries", "id": "2026-09-23-webhook-retries"}`.
+
+### `intent`
+
+```sh
+tools/specs/specs intent check <spec-dir> [--diff]
+tools/specs/specs intent record <spec-dir>
+```
+
+`check` compares the intent file with the hash the spec recorded: `unchanged` (exit 0),
+`changed` or `not recorded` (exit 1). With `--diff` it prints the change since the recorded
+version, found as the newest committed version of the file with that hash; uncommitted edits
+are included. If no committed version matches, it says so instead of guessing a base.
+
+`record` stores the intent file's current hash in the spec's `intent` block (with who and
+when), rewriting only that block, and adds the block after `title` if the spec has none. It is
+what `/sdlc:sync` runs once the spec has been reviewed against the change.
 
 ## Development
 

@@ -17,7 +17,7 @@ from .output import Output
 VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
 
 # Modules that register subcommands when imported.
-_BUILTIN_COMMAND_MODULES: tuple[str, ...] = ("sdlc_specs.lint", "sdlc_specs.new")
+_BUILTIN_COMMAND_MODULES: tuple[str, ...] = ("sdlc_specs.lint", "sdlc_specs.new", "sdlc_specs.intent")
 
 
 @dataclass

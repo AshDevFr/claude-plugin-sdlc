@@ -88,3 +88,28 @@ def set_top_level(text: str, key: str, value: str) -> str:
     else:
         lines.insert(end, f"{key}: {value}")
     return newline.join(lines)
+
+
+def set_top_level_block(text: str, key: str, child_lines: list[str], after: str | None = None) -> str:
+    """Replace the mapping under top-level `key` with `child_lines` (indented two spaces).
+
+    A missing key is inserted after the top-level key `after` (and its block) when given,
+    otherwise just before the closing `---`.
+    """
+    lines, newline = split_lines(text)
+    end = closing_index(lines)
+    new = [f"{key}:"] + [f"  {line}" for line in child_lines]
+    positions = {}
+    for index in range(1, end):
+        field = _FIELD.match(lines[index])
+        if field and not field["indent"]:
+            positions[field["key"]] = index
+    if key in positions:
+        start = positions[key]
+        lines[start : block_end(lines, start, end) + 1] = new
+    elif after in positions:
+        insert_at = block_end(lines, positions[after], end) + 1
+        lines[insert_at:insert_at] = new
+    else:
+        lines[end:end] = new
+    return newline.join(lines)

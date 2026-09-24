@@ -239,4 +239,10 @@ intent_fixture("L014-fail", INTENT_SPEC[:start] + INTENT_SPEC[end:], rule="L014"
 intent_fixture("L015-pass", INTENT_SPEC)
 intent_fixture("L015-fail", INTENT_SPEC, intent=None, rule="L015", needle="file: intent.md")
 
+# L016: the intent file changed after the spec recorded its hash
+intent_fixture("L016-pass", INTENT_SPEC)
+edited_intent = INTENT_TEXT.replace("## Constraints\n", "## Constraints\nNo new PII.\n")
+assert edited_intent != INTENT_TEXT
+intent_fixture("L016-fail", INTENT_SPEC, intent=edited_intent, rule="L016", needle="content_sha256:")
+
 print("\n".join(sorted(p.name for p in OUT.iterdir())))
