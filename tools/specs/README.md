@@ -127,14 +127,14 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 |---|---|
 | `L001` | `spec.md` exists and its frontmatter parses |
 | `L002` | Required frontmatter fields and types; no unknown fields; no `approved`, `approvers`, `pr` or `status` |
-| `L003` | `id` equals the directory name; a ticket spec's directory starts with the `ticket.ref` prefix, an intent spec's id is `YYYY-MM-DD-<slug>` with a real date |
+| `L003` | `id` equals the directory name; a spec with an intent file has a `YYYY-MM-DD-<slug>` id with a real date, even with a ticket linked; a ticket-only spec's directory starts with the `ticket.ref` prefix, and a ref whose project can't be resolved (no `tracker.project`, no `origin`) is reported here |
 | `L004` | Ticket specs: `ticket.system` matches the configured tracker |
 | `L005` | All template sections present, in any order |
 | `L006` | `AC-n` numbers unique; at least one criterion not struck |
 | `L007` | With `--base`: no criterion removed (strike it through instead) |
 | `L008` | With `--ready`: no open questions |
 | `L009` | Every `attachments` entry exists inside the spec directory |
-| `L010` | Ticket specs: `ticket.snapshot.md` exists, is unedited, and matches `ticket.snapshot.content_sha256` |
+| `L010` | Ticket-only specs: `ticket.snapshot.md` exists, is unedited, and matches `ticket.snapshot.content_sha256` |
 | `L011` | With `--base`: a changed body bumps `revision` and adds a matching `## Revisions` entry |
 | `L012` | `state: superseded` requires `superseded_by` |
 | `L013` | A line that looks like an acceptance criterion but isn't one (wrong form, wrong section, in a code block) |
@@ -161,7 +161,7 @@ tools/specs/specs new --key <ticket> --title <title> [--slug <slug>] [--supersed
 Creates a spec directory. Exits 1 without writing anything when the directory already exists.
 
 - **Intent spec** (the default): `<specs_dir>/<date>-<slug>/` with `spec.md` and `intent.md`.
-  The date is today in UTC unless `--date` is given; the slug comes from the title unless
+  The date is today (local date) unless `--date` is given; the slug comes from the title unless
   `--slug` is given. `intent.md` is the intent template filled with the title, or a byte copy
   of `--intent-file`. The spec's frontmatter records the intent file's hash:
 

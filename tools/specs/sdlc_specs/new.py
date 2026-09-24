@@ -42,6 +42,12 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _today() -> str:
+    """The engineer's local date: an id names the day they started, as their calendar shows it.
+    Recorded timestamps stay UTC."""
+    return datetime.date.today().isoformat()
+
+
 def template_text(config: Config, root: Path, name: str) -> str:
     """The team's copy in `<specs_dir>/templates/` when there is one, else the helper's."""
     custom = config.specs_path(root) / "templates" / name
@@ -87,7 +93,7 @@ def render_frontmatter(
 
 def _parse_date(value: str | None) -> str:
     if value is None:
-        return _now().date().isoformat()
+        return _today()
     try:
         if not _DATE.match(value):
             raise ValueError
@@ -116,7 +122,7 @@ def _superseding_edit(old_dir: Path, old_id: str, new_id: str) -> tuple[Path, st
 def _configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--title", required=True, help="the spec title")
     parser.add_argument("--slug", help="directory slug (default: from the title)")
-    parser.add_argument("--date", help="intent specs: the id's date, YYYY-MM-DD (default: today, UTC)")
+    parser.add_argument("--date", help="intent specs: the id's date, YYYY-MM-DD (default: today, local date)")
     parser.add_argument("--intent-file", metavar="PATH", help="intent specs: copy this file as intent.md")
     parser.add_argument("--key", help="ticket specs: #123, group/project#123 or ENG-123")
     parser.add_argument("--supersedes", metavar="ID", help="id of the spec this one replaces")
@@ -142,7 +148,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     root, config = args.repo_root, args.config
     specs = config.specs_path(root)
     author = _author(root)
-    today = _now().date().isoformat()
+    today = _today()
 
     if args.key:
         if args.date or args.intent_file:

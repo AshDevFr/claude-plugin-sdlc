@@ -14,7 +14,7 @@ from typing import Any
 
 from . import cli
 from .config import Config
-from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
+from .errors import EXIT_CHECK_FAILED, EXIT_OK, ConfigError, UsageError
 from .keys import Keys
 from .output import Output
 from .snapshot import content_sha256, intent_sha256, normalise, parse_snapshot_file
@@ -26,15 +26,16 @@ SNAPSHOT_FILE = "ticket.snapshot.md"
 RULES = {
     "L001": "Frontmatter present and parses",
     "L002": "Required frontmatter fields and types; no unknown or approval/PR fields",
-    "L003": "id equals the directory name; a ticket spec's directory has the ticket prefix, "
-    "an intent spec's is YYYY-MM-DD-<slug>",
+    "L003": "id equals the directory name; a spec with an intent file is YYYY-MM-DD-<slug>, "
+    "a ticket-only spec's directory has the ticket prefix",
     "L004": "ticket.system matches the configured tracker (ticket specs)",
     "L005": "Required sections present, in any order",
     "L006": "AC-n unique; at least one criterion not struck",
     "L007": "No acceptance criterion removed compared to --base (strike it instead)",
     "L008": "With --ready: no open questions",
     "L009": "Every attachment exists in the spec directory",
-    "L010": "ticket.snapshot.md exists, parses, and matches ticket.snapshot.content_sha256 (ticket specs)",
+    "L010": "ticket.snapshot.md exists, parses, and matches ticket.snapshot.content_sha256 "
+    "(ticket-only specs)",
     "L011": "With --base: a changed body bumps revision and adds a matching Revisions entry",
     "L012": "state: superseded requires superseded_by",
     "L013": "Acceptance-criterion-like lines that are not canonical criteria",
@@ -297,9 +298,11 @@ class _SpecLinter:
                 self.line_of("id"),
                 f"id '{fm['id']}' does not match the directory name '{self.dir.name}'",
             )
-        if "ticket" not in fm:
+        # The directory follows the spec's origin: a spec written from an intent file keeps its
+        # date id when a ticket is linked later, so only a ticket-only spec takes the prefix.
+        from_intent = "intent" in fm
+        if from_intent or "ticket" not in fm:
             self.date_id(fm)
-            return
         ticket = fm.get("ticket")
         if not isinstance(ticket, dict) or not _nonempty_str(ticket.get("ref")):
             return
@@ -307,6 +310,14 @@ class _SpecLinter:
             key = self.keys.parse(ticket["ref"])
         except UsageError as exc:
             self.add("L003", self.line_of("ticket.ref"), exc.message)
+            return
+        except ConfigError as exc:
+            # A spec from an intent doesn't need the project; a ticket-only spec does, and one
+            # such spec must not stop lint (and the status line) for the whole repository.
+            if not from_intent:
+                self.add("L003", self.line_of("ticket.ref"), exc.message)
+            return
+        if from_intent:
             return
         prefix = key.dir_prefix()
         if self.dir.name != prefix and not self.dir.name.startswith(prefix + "-"):
@@ -330,7 +341,8 @@ class _SpecLinter:
             self.add(
                 "L003",
                 self.line_of("id"),
-                f"id '{fm['id']}' must be YYYY-MM-DD-<slug> with a real date when the spec has no ticket",
+                f"id '{fm['id']}' must be YYYY-MM-DD-<slug> with a real date when the spec has an intent "
+                "file or no ticket",
             )
 
     # L014, L015
@@ -429,8 +441,8 @@ class _SpecLinter:
 
     # L010
     def snapshot(self, fm: dict[str, Any]) -> None:
-        if "ticket" not in fm:
-            return  # intent specs have no ticket receipt
+        if "ticket" not in fm or "intent" in fm:
+            return  # the intent file is the source; a linked ticket is a reference, not a receipt
         ticket = fm.get("ticket")
         snap = ticket.get("snapshot") if isinstance(ticket, dict) else None
         if not isinstance(snap, dict):

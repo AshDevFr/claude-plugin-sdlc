@@ -198,6 +198,18 @@ class RuleDetailTest(LintRepoTestCase):
                 self.assertEqual(self.run_lint(base="HEAD"), [])
 
 
+class UnresolvedProjectTest(LintRepoTestCase):
+    def test_unresolvable_project_is_a_finding_not_an_error(self):
+        # No tracker.project and no origin: one spec must not stop lint for the whole repo.
+        self.write_config("tracker:\n  system: gitlab\ncode_host:\n  system: gitlab\n")
+        self.load_fixture("L003-pass")
+        spec = next(self.specs.glob("*/spec.md"))
+        spec.write_text(spec.read_text().replace("ref: billing/api#123", "ref: acme/webhooks#42"))
+        findings = [f for f in self.run_lint(ready=False) if f.rule == "L003"]
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("tracker.project", findings[0].message)
+
+
 class CliTest(LintRepoTestCase):
     def test_workflow_example_lints_clean(self):
         self.copy_spec_dirs(LINT / "L001-pass" / "head")
@@ -295,6 +307,22 @@ class IntentSpecLintTest(LintRepoTestCase):
         findings = self.run_lint(ready=False)
         self.assertEqual([f.rule for f in findings], ["L003"])
         self.assertIn("date", findings[0].message)
+
+    def link_ticket(self, spec_dir, ref="acme/webhooks#42"):
+        spec = spec_dir / "spec.md"
+        ticket = f"ticket:\n  system: gitlab\n  ref: {ref}\n  url: https://gitlab.example.com/x\nrevision:"
+        spec.write_text(spec.read_text().replace("revision:", ticket, 1))
+
+    def test_a_linked_ticket_keeps_the_date_id(self):
+        # The directory follows the spec's origin: linking a ticket later needs no rename, and
+        # the ticket is a reference, so it needs no snapshot and no resolvable project.
+        self.write_config("tracker:\n  system: gitlab\ncode_host:\n  system: gitlab\n")
+        self.link_ticket(self.make())
+        self.assertEqual(self.rules(), [])
+
+    def test_a_linked_ticket_that_does_not_parse_is_reported(self):
+        self.link_ticket(self.make(), ref="not a ticket")
+        self.assertEqual(self.rules(), ["L003"])
 
     def test_ticket_rules_do_not_apply_without_a_ticket(self):
         self.make()
