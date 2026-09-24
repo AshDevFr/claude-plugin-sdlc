@@ -1,0 +1,23 @@
+{
+  "name": "sdlc",
+  "owner": {
+    "name": "Sylvain Cau",
+    "url": "https://git.4sh.io/ash"
+  },
+  "metadata": {
+    "description": "The sdlc plugin: spec-driven development for teams sharing one repository."
+  },
+  "plugins": [
+    {
+      "name": "sdlc",
+      "source": "./",
+      "description": "Spec-driven development for teams: intent, reviewed spec, plan, implementation. Advice, not enforcement.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Sylvain Cau",
+        "url": "https://git.4sh.io/ash"
+      },
+      "license": "MIT"
+    }
+  ]
+}
