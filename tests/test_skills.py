@@ -7,7 +7,15 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
 HELPER_TEMPLATES = ROOT / "tools" / "specs" / "sdlc_specs" / "templates"
-NAMES = ("workflow", "spec-template", "commit-conventions", "intent-writing", "intent-sync")
+NAMES = (
+    "workflow",
+    "spec-template",
+    "commit-conventions",
+    "intent-writing",
+    "intent-sync",
+    "test-first",
+    "receiving-review",
+)
 PLATFORMS = ("GitLab", "GitHub", "Linear")
 SPEC_CHANGE_KINDS = ("initial", "clarify", "amend", "acknowledge", "supersede")
 
@@ -102,3 +110,20 @@ class IntentSyncTest(unittest.TestCase):
         for word in (r"ticket", r"tracker", r"\bMCP\b", r"\bCI\b", r"nightly", r"\bpost(s|ed|ing)?\b"):
             with self.subTest(word=word):
                 self.assertIsNone(re.search(word, body, flags=re.I))
+
+
+class PortedSkillsTest(unittest.TestCase):
+    PORTED = ("test-first", "receiving-review")
+
+    def test_no_sdd_workflow_left(self):
+        # Ported from a personal workflow with task files and a spec repo; none of it applies here.
+        for name in self.PORTED:
+            _, body = read(name)
+            for pattern in (r"task file", r"\.specs/docs", r"phase-[0-9]", r"/sdd:", r"ticket"):
+                with self.subTest(skill=name, pattern=pattern):
+                    self.assertIsNone(re.search(pattern, body, flags=re.I))
+
+    def test_test_first_shows_the_citation_form(self):
+        _, body = read("test-first")
+        self.assertRegex(body, r"\b\d{4}-\d{2}-\d{2}-[a-z0-9-]+:AC-\d+\b")
+        self.assertIn("<spec-id>:AC-n", body)
