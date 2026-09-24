@@ -25,6 +25,7 @@ EXPECTED = {
     "handoff": True,
     "plan": True,
     "implement": True,
+    "bug": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -181,6 +182,23 @@ class ImplementCommandTest(unittest.TestCase):
         section = self.text[self.text.index("## When the spec is wrong") :]
         self.assertIn("/sdlc:sync", section)
         self.assertIn("no further commit", section)
+
+
+class BugCommandTest(unittest.TestCase):
+    def setUp(self):
+        self.text = (COMMANDS / "bug.md").read_text(encoding="utf-8")
+
+    def test_no_sdd_workflow_left(self):
+        for pattern in (r"\.specs/docs", r"task file", r"/sdd:", r"ticket", r"spec-required"):
+            with self.subTest(pattern=pattern):
+                self.assertIsNone(re.search(pattern, self.text, flags=re.I))
+
+    def test_diagnosis_before_repair(self):
+        for stage in ("# Stage: assess", "# Stage: fix", "# Stage: test"):
+            self.assertIn(stage, self.text)
+        self.assertLess(self.text.index("# Stage: assess"), self.text.index("# Stage: fix"))
+        self.assertIn("edits no source", self.text)
+        self.assertIn("bugs/<slug>.local.md", self.text)
 
 
 class CheckerTest(unittest.TestCase):
