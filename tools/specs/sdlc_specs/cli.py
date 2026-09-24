@@ -23,6 +23,7 @@ _BUILTIN_COMMAND_MODULES: tuple[str, ...] = (
     "sdlc_specs.intent",
     "sdlc_specs.coverage",
     "sdlc_specs.status",
+    "sdlc_specs.init",
 )
 
 
