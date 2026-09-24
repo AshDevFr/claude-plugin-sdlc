@@ -37,9 +37,11 @@ def spec_for_branch(root: Path, config: Config, branch: str) -> Path | None:
     if key is None:
         return None
     try:
-        return Keys(config, root).find_spec_dir(key)
+        found = Keys(config, root).find_spec_dir(key)
     except CheckFailed:
         return None  # two specs for one ticket: lint reports it; a status line shouldn't guess
+    # A date id can parse as a ticket number (2026-...); only a directory holding a spec counts.
+    return found if found is not None and (found / "spec.md").is_file() else None
 
 
 def spec_dir_arg(root: Path, config: Config, raw: str | None) -> Path:
@@ -55,3 +57,16 @@ def spec_dir_arg(root: Path, config: Config, raw: str | None) -> Path:
     if found is None:
         raise UsageError("no spec for this branch; pass SPEC_DIR")
     return found
+
+
+def intent_only_for_branch(root: Path, config: Config, branch: str) -> Path | None:
+    """A spec directory named in the branch that holds only an intent, written ahead of its spec."""
+    specs = config.specs_path(root)
+    if not specs.is_dir():
+        return None
+    candidates = [
+        p
+        for p in specs.iterdir()
+        if p.name in branch and (p / "intent.md").is_file() and not (p / "spec.md").exists()
+    ]
+    return max(candidates, key=lambda p: len(p.name)) if candidates else None

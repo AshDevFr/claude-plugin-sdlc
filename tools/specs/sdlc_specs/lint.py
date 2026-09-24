@@ -145,6 +145,8 @@ class _SpecLinter:
 
     def run(self) -> list[Finding]:
         if not self.spec_path.is_file():
+            if (self.dir / "intent.md").is_file():
+                return self.findings  # an intent written ahead of its spec: nothing to check yet
             self.add("L001", None, f"no {SPEC_FILE} in the spec directory")
             return self.findings
         text = self.spec_path.read_text(encoding="utf-8")
