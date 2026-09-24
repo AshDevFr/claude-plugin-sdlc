@@ -3,7 +3,7 @@
 import argparse
 
 from . import cli
-from .branch import current_branch, spec_for_branch
+from .branch import current_branch, intent_only_for_branch, spec_for_branch
 from .intent import state_of
 from .lint import LintOptions, lint
 from .output import Output
@@ -25,6 +25,12 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         out.print("no branch")
         return cli.Result(data={"branch": None, "spec": None})
     spec_dir = spec_for_branch(root, config, branch)
+    if spec_dir is None and (waiting := intent_only_for_branch(root, config, branch)) is not None:
+        handoff = (waiting / HANDOFF_FILE).is_file()
+        out.print(_waiting(f"{waiting.name}: intent only, no spec yet", handoff))
+        return cli.Result(
+            data={"branch": branch, "spec": waiting.name, "intent": "intent only", "handoff": handoff}
+        )
     if spec_dir is None:
         handoff = (config.specs_path(root) / HANDOFF_FILE).is_file()
         out.print(_waiting("no spec for this branch", handoff))

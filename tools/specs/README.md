@@ -193,6 +193,7 @@ JSON output: `{"ok": true, "path": "specs/2026-09-23-webhook-retries", "id": "20
 tools/specs/specs intent check [<spec-dir>] [--diff]
 tools/specs/specs intent record [<spec-dir>]
 tools/specs/specs intent assess [<spec-dir> | --file <path>]
+tools/specs/specs intent new --title <title> [--slug <slug>] [--date YYYY-MM-DD]
 ```
 
 Without `<spec-dir>`, each uses the current branch's spec (see `status`).
@@ -211,6 +212,17 @@ template's guidance) or `ok`, plus the title and Author line, and lists the open
 (list items, or one per paragraph when there are none). The sections come from the team's
 `specs/templates/intent.md` when it has one. It always exits 0: gaps are for the plugin to
 offer help with, never a failure.
+
+`new` starts an intent before its spec, the file `/sdlc:intent` then fills in. Its id is
+`YYYY-MM-DD-<slug>` (local date, as `new`). With an `intents/` directory at the repository root it
+writes `intents/<id>.md`; otherwise a spec directory holding only the intent,
+`<specs_dir>/<id>/intent.md`. Both start from the intent template in use; an id already taken
+exits 1.
+
+**Intent only.** A spec directory with `intent.md` and no `spec.md` is an intent waiting for its
+spec: `lint` has nothing to report for it, `check --all` and `coverage` skip it, and `status` on
+its branch says `<id>: intent only, no spec yet`. `new` with the same id writes `spec.md`
+beside it and records the existing intent's hash.
 
 ### `coverage`
 

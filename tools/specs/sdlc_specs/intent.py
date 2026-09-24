@@ -15,9 +15,9 @@ from pathlib import Path
 
 from . import cli
 from .branch import current_branch, spec_for_branch
-from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
+from .errors import EXIT_CHECK_FAILED, EXIT_OK, CheckFailed, UsageError
 from .frontmatter import scalar, set_top_level_block
-from .new import INTENT_FILE, _author, template_text
+from .new import INTENT_FILE, _author, _today, intent_spec_id, render_body, template_text
 from .output import Output
 from .snapshot import intent_sha256, normalise
 from .spec import _LIST_ITEM, Section, SpecParseError, _items, _sections, parse_spec_text
@@ -199,6 +199,10 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     ass = sub.add_parser("assess", help="which intent template sections are missing, empty or untouched")
     ass.add_argument("spec_dir", metavar="SPEC_DIR", nargs="?")
     ass.add_argument("--file", metavar="PATH", help="assess this file instead of a spec's intent")
+    new = sub.add_parser("new", help="start an intent before its spec: intents/<id>.md or <specs_dir>/<id>/")
+    new.add_argument("--title", required=True, help="what the intent is about, in a few words")
+    new.add_argument("--slug", help="default: from the title")
+    new.add_argument("--date", help="the id's date, YYYY-MM-DD (default: today, local date)")
 
 
 @cli.command("intent", help="the spec's record of its intent", configure=_configure, needs_config=True)
@@ -206,6 +210,8 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     root = args.repo_root.resolve()
     if args.intent_command == "assess":
         return _run_assess(args, out, root)
+    if args.intent_command == "new":
+        return _run_new(args, out, root)
     spec_dir = _spec_dir(root, args.spec_dir, args.config)
     rel = spec_dir.relative_to(root).as_posix()
 
@@ -249,3 +255,26 @@ def _run_assess(args: argparse.Namespace, out: Output, root: Path) -> cli.Result
     return cli.Result(
         data={"sections": [{"section": n, "state": st} for n, st in states], "open_questions": questions}
     )
+
+
+# A team that keeps intents apart from specs, so they can be reviewed before anyone writes a spec,
+# has this directory at the repository root.
+INTENTS_DIR = "intents"
+
+
+def _run_new(args: argparse.Namespace, out: Output, root: Path) -> cli.Result:
+    intent_id = intent_spec_id(args.date, args.slug or args.title)
+    if (root / INTENTS_DIR).is_dir():
+        target, location = root / INTENTS_DIR / f"{intent_id}.md", "intents"
+    else:
+        target, location = args.config.specs_path(root) / intent_id / INTENT_FILE, "spec-dir"
+    rel = target.relative_to(root).as_posix()
+    # In a spec directory the whole id is taken once the directory exists, spec or not.
+    taken = target if location == "intents" else target.parent
+    if taken.exists():
+        raise CheckFailed(f"{taken.relative_to(root).as_posix()} already exists; pick another --slug")
+    text = render_body(template_text(args.config, root, INTENT_FILE), args.title, "", _today(), _author(root))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    out.print(rel)
+    return cli.Result(data={"path": rel, "id": intent_id, "location": location})

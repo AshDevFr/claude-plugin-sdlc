@@ -102,6 +102,19 @@ def _parse_date(value: str | None) -> str:
         raise UsageError(f"--date {value!r}: expected a real date as YYYY-MM-DD") from None
 
 
+def intent_spec_id(date: str | None, slug_or_title: str) -> str:
+    """`YYYY-MM-DD-<slug>`: the id of a spec, or of an intent written before its spec."""
+    slug = slugify(slug_or_title)
+    if not slug:
+        raise UsageError(f"{slug_or_title!r} gives an empty slug; pass --slug")
+    return f"{_parse_date(date)}-{slug}"
+
+
+def intent_only(path: Path) -> bool:
+    """A spec directory holding an intent written ahead of its spec (`/sdlc:intent`)."""
+    return (path / INTENT_FILE).is_file() and not (path / "spec.md").exists()
+
+
 def _superseding_edit(old_dir: Path, old_id: str, new_id: str) -> tuple[Path, str]:
     """The old spec's new text, computed before anything is written."""
     spec_path = old_dir / "spec.md"
@@ -141,6 +154,17 @@ def _write(target: Path, files: dict[str, bytes], old_edit: tuple[Path, str] | N
         raise
 
 
+def _write_beside(target: Path, spec: bytes, old_edit: tuple[Path, str] | None) -> None:
+    (target / "spec.md").write_bytes(spec)
+    try:
+        if old_edit:
+            old_path, old_text = old_edit
+            old_path.write_text(old_text, encoding="utf-8")
+    except BaseException:
+        (target / "spec.md").unlink()
+        raise
+
+
 @cli.command(
     "new", help="create a spec directory from the templates", configure=_configure, needs_config=True
 )
@@ -162,12 +186,17 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         intent_label, intent_block, extra = key.ref(), None, {}
         ticket = {"system": config.tracker_system, "ref": key.ref()}
     else:
-        date = _parse_date(args.date)
-        slug = slugify(args.slug or args.title)
-        if not slug:
-            raise UsageError(f"{args.slug or args.title!r} gives an empty slug; pass --slug")
-        spec_id = f"{date}-{slug}"
-        if args.intent_file:
+        spec_id = intent_spec_id(args.date, args.slug or args.title)
+        existing = specs / spec_id / INTENT_FILE
+        adopt = intent_only(specs / spec_id)
+        if adopt and args.intent_file and Path(args.intent_file).resolve() != existing.resolve():
+            raise CheckFailed(
+                f"{existing.relative_to(root).as_posix()} already holds this id's intent; "
+                "drop --intent-file to write the spec beside it"
+            )
+        if adopt:
+            intent_bytes = existing.read_bytes()
+        elif args.intent_file:
             source = Path(args.intent_file)
             if not source.is_file():
                 raise UsageError(f"--intent-file {args.intent_file}: no such file")
@@ -187,7 +216,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         ticket = None
 
     target = specs / spec_id
-    if target.exists():
+    if target.exists() and not (ticket is None and intent_only(target)):
         raise CheckFailed(f"{target.relative_to(root).as_posix()} already exists; pick another --slug")
     old_edit = (
         _superseding_edit(specs / args.supersedes, args.supersedes, spec_id) if args.supersedes else None
@@ -199,7 +228,10 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         ticket=ticket,
         supersedes=[args.supersedes] if args.supersedes else [],
     ) + render_body(template_text(config, root, "spec.md"), args.title, intent_label, today, author)
-    _write(target, {"spec.md": text.encode("utf-8"), **extra}, old_edit)
+    if target.exists():  # an intent written ahead of its spec: add the spec beside it
+        _write_beside(target, text.encode("utf-8"), old_edit)
+    else:
+        _write(target, {"spec.md": text.encode("utf-8"), **extra}, old_edit)
 
     rel = target.relative_to(root).as_posix()
     out.print(rel)
