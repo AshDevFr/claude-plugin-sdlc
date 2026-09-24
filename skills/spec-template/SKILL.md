@@ -68,3 +68,10 @@ which are cited.
 When the intent is silent and a default was chosen, say so in the Design or Decisions section,
 with what would overturn it. A guess written as a fact becomes load-bearing without anyone
 having agreed to it.
+
+## The plan
+
+`/sdlc:plan` writes the engineer's working plan from the spec, using the template beside this
+skill, `${CLAUDE_PLUGIN_ROOT}/skills/spec-template/plan.md`: test-first steps, each naming the
+criteria it serves, and a map showing every criterion has a step. It lives in
+`<spec-dir>/plan.local.md`, ignored by git, unless the team renames it `plan.md` to commit it.
