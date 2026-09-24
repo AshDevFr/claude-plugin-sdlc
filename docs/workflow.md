@@ -1,132 +1,118 @@
 # Team Spec-Driven Workflow
 
 How a team of 30 to 40 engineers sharing one repository applies the AI-native SDLC
-(intent, spec, plan, build, review) without a separate spec repo, without asking PMs to
-write markdown, and without making a Claude plugin the source of truth.
+(intent, spec, plan, build, review) without a separate spec repo and without making a Claude
+plugin the source of truth. This document is guidance: it describes practices the `sdlc`
+plugin makes easy, not rules anything enforces.
 
-Works with any combination of:
+Works with any code host and tracker; the conventions below mention GitLab, GitHub and Linear
+where they differ.
 
-- **Tracker** (where tickets live): GitLab Issues, GitHub Issues, Linear.
-- **Code host** (where code and review live): GitLab, GitHub.
-
-- Status: draft for team discussion
+- Status: guidance, first version for the intent-first plugin
 - Based on: [The AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook)
 
 ### Vocabulary
 
 | Term | Means |
 |---|---|
-| **Ticket** | A GitLab issue, GitHub issue or Linear issue |
-| **Ticket key** | `123` (GitLab/GitHub, same project), `group/project#123` or `org/repo#123` (other project), `ENG-123` (Linear) |
+| **Intent** | `intent.md`: the original request, in the words of whoever has the problem |
+| **Spec** | `spec.md`: the contract the team reviews, builds against and cites from tests |
+| **Spec id** | The spec's directory name, `YYYY-MM-DD-<slug>`, fixed at creation |
 | **PR** | A GitHub pull request or a GitLab merge request. "Draft PR" covers both drafts |
 | **Code owners** | The `CODEOWNERS` mechanism on either code host |
-| **Pipeline** | GitLab CI or GitHub Actions |
 
 ---
 
 ## 1. What we change from the playbook
 
-The playbook describes a chain of committed files: `intent.md` → `spec.md` → `plan.md` →
-code. That chain works for one engineer or for an autonomous loop. It gets expensive in a
-shared repo:
+The playbook chains committed files: `intent.md` → `spec.md` → `plan.md` → code. That works for
+one engineer or an autonomous loop. In a shared repository some of it gets expensive:
 
-- **`intent.md` duplicates the ticket.** Two human-maintained sources of truth for the same
-  intent means someone has to keep them in sync, and nobody will.
-- **PMs don't write markdown in git**, and shouldn't have to.
 - **Separate artifacts with separate approvals** multiply PRs and review rounds.
 - **Committed plans go stale** and are noise for everyone who isn't the implementer.
-- **The playbook only measures requirement changes after the fact** (spec commits dated
-  after the plan). It doesn't manage them while the work is in flight.
+- **Intents arrive in every state.** Tooling that demands a perfect one stalls; tooling that
+  ignores quality produces weak specs.
+- **Heavy enforcement gets routed around.** A gate a team didn't choose teaches people to
+  avoid the process.
 
 Our revision:
 
-| Playbook artifact | Our equivalent | Owner | Lives in |
+| Playbook artifact | Here | Owner | Lives in |
 |---|---|---|---|
-| `intent.md` | **The ticket** (title + description) | PM / ticket author | Tracker |
-| `spec.md` | `specs/<ticket-key>-<slug>/spec.md` | Engineer writes, approver approves | Product repo, same PR as the code |
-| `plan.md` | `plan.local.md`, not committed by default | Engineer | Local working copy (gitignored) |
-| Code + tests | Code + tests | Engineer | Same PR |
-| Approval log | PR reviews + code owners | Code host | PR history |
-| Audit trail | Ticket ↔ branch ↔ PR ↔ commits ↔ spec | Tracker/code-host links + commit trailers | Git + tracker + code host |
+| `intent.md` | `specs/<id>/intent.md` | Whoever has the problem, helped by Claude | Product repo, same PR as the spec |
+| `spec.md` | `specs/<id>/spec.md` | Engineer writes, reviewers approve | Product repo, same PR as the code |
+| `plan.md` | `plan.local.md`, not committed by default | Engineer | Local working copy |
+| Code and tests | Code and tests | Engineer | Same PR |
+| Approval log | PR reviews and code owners | Code host | PR history |
+| Audit trail | Spec ↔ commits through trailers | Commit trailers | Git |
 
 ### Principles
 
-1. **The ticket is the intent.** Nobody maintains a copy of it. The spec records *which
-   version* of the ticket it was written against: a content hash, plus a generated,
-   never-edited snapshot file used as evidence and for diffs (section 3.3).
-2. **Direction of truth is ticket → spec → code.** A scope change discovered during
-   implementation goes back into the ticket first, then flows down. The spec never silently
-   drifts from the ticket.
-3. **The tracker, the code host and the repo are the source of truth. The plugin is a
-   helper.** Anything that must hold is enforced by the pipeline, because not everyone will
-   use the plugin, and a rule only the plugin knows is a rule half the team never sees.
-4. **Don't store in files what the code host already knows.** Approvers, approval state
-   and merge state live in the PR. The spec frontmatter never claims `approved`, because
-   that claim would drift from the PR.
-5. **Governance proportionate to risk.** Only tickets labelled `spec-required` get a spec.
-   A one-line fix with an empty spec is a tax that teaches people to route around the process.
-6. **Merged specs are frozen records.** A later change to the same behaviour gets a new
-   ticket and a new spec that `supersedes` the old one.
-7. **Platform differences live in adapters, not in the process.** The workflow below is the
-   same on every tracker and code host; section 10 maps each step to each system.
+1. **`spec.md` is the contract; `intent.md` is the original request.** The intent can be
+   imperfect. The spec is what is reviewed, built against and cited.
+2. **Truth flows intent → spec → code.** When code shows the spec is wrong, the spec is amended
+   on purpose, with a new revision, never silently.
+3. **The repository and the code host are the source of truth; the plugin is a helper.**
+4. **Don't store in files what the code host already knows.** Approvers, approval state and
+   merge state live in the PR. A spec never claims `approved`.
+5. **Governance proportionate to risk.** Substantial changes get a spec; a one-line fix
+   doesn't. That's a team convention.
+6. **Merged specs are frozen records.** A later change to the same behaviour gets a new spec
+   that `supersedes` the old one.
+7. **Offer, don't enforce.** Nothing gates on the quality of an intent, and nothing the plugin
+   checks blocks a merge. Checks report; people decide. A team that wants enforcement adds it
+   to its own CI (section 6).
 
 ---
 
 ## 2. Repository layout
 
-We always use a directory per ticket, even when it only holds `spec.md`. Tickets that
-earn a spec are the substantial ones, and those are the ones that grow attachments (threat
-model, diagrams, API schemas, mockups). One shape forever means pipeline globs, links from
-the ticket and tooling never change.
+One directory per change, even when it only holds a spec: changes that earn a spec are the
+substantial ones, and those grow attachments (threat model, diagrams, API schemas).
 
 ```
 <repo>/
-├── specs/                                  # or .specs/ (see Open decisions)
-│   ├── README.md                           # this workflow, short version
-│   ├── config.yml                          # which tracker and code host, see 2.1
-│   ├── 123-prorate-plan-changes/           # GitLab / GitHub ticket
-│   │   ├── spec.md                         # required
-│   │   ├── ticket.snapshot.md              # generated, never edited
-│   │   ├── threat-model.md                 # optional
-│   │   ├── sequence.png                    # optional, linked from spec.md
-│   │   ├── api.yaml                        # optional
-│   │   └── plan.local.md                   # gitignored, engineer's working plan
-│   └── eng-131-webhook-retries/            # Linear ticket
-│       ├── spec.md
-│       └── ticket.snapshot.md
+├── specs/                                  # or .specs/
+│   ├── config.yml                          # see 2.1
+│   ├── templates/                          # the team's spec and intent templates
+│   │   ├── spec.md
+│   │   └── intent.md
+│   └── 2026-09-23-webhook-retries/
+│       ├── intent.md                       # the original request
+│       ├── spec.md                         # the contract
+│       ├── threat-model.md                 # optional attachments
+│       └── plan.local.md                   # gitignored, the engineer's working plan
 ├── CODEOWNERS                              # .gitlab/ or .github/ also valid
-├── <PR template>                           # see section 10
-├── tools/specs/                            # shared scripts, see 9.4
 └── .gitignore                              # includes: specs/**/*.local.md
 ```
 
-**Directory naming:** `<ticket-key>-<kebab-slug>`, lowercased:
+**Ids.** A spec's id is its creation date and a slug, `YYYY-MM-DD-<slug>`. It needs no
+coordination between engineers on parallel branches, reads well in `git log`, and never
+changes, even if a ticket is linked later. Keep slugs short: tests cite `<id>:AC-n`.
 
-| Tracker | Ticket | Directory | Branch |
-|---|---|---|---|
-| GitLab / GitHub, same project | `#123` | `123-prorate-plan-changes` | `123-prorate-plan-changes` (what both hosts generate from the issue) |
-| GitLab / GitHub, other project | `billing/api#123` | `billing-api-123-prorate-plan-changes` | same |
-| Linear | `ENG-131` | `eng-131-webhook-retries` | `eng-131-webhook-retries` (set Linear's branch format to drop the username prefix) |
+**Plans.** `plan.local.md` is ignored by git on purpose. If a change deserves a committed plan
+(a multi-PR migration, say), rename it `plan.md` and commit it deliberately.
 
-**Plans:** `plan.local.md` is ignored by git on purpose. If a team decides a particular
-change deserves a committed plan (for example a multi-PR migration), rename it `plan.md`
-and commit it deliberately. The default is not to.
+**Templates.** `/sdlc:init` copies the plugin's spec and intent templates into
+`specs/templates/`. Edit them to suit the team; new specs use the repository's copy.
 
 ### 2.1 `specs/config.yml`
 
-The only place the systems are named. The plugin and the pipeline scripts read it.
+Written by `/sdlc:init`.
 
 ```yaml
 tracker:
-  system: linear            # gitlab | github | linear
-  team_key: ENG             # linear only
-  project: billing/api      # gitlab/github only, when tickets live in another project
-  spec_label: spec-required
+  system: linear              # gitlab | github | linear: ticket key forms, for later
+  team_key: ENG               # linear only
 code_host:
-  system: github            # gitlab | github
-  spec_approvers: "@acme/spec-approvers"   # a group, or a list of usernames
-specs_dir: specs
+  system: github              # gitlab | github: CODEOWNERS location, PR conventions
+  spec_approvers: "@acme/spec-approvers"   # optional: suggests the CODEOWNERS entry
+coverage:
+  test_globs: ["**/test*/**", "**/*_test.*", "**/*.test.*", "**/*.spec.*"]   # the default
 ```
+
+`tracker.project` names the project tickets live in when it isn't the code repository.
+`specs_dir` is only written for `.specs`.
 
 ---
 
@@ -136,114 +122,107 @@ specs_dir: specs
 
 ```yaml
 ---
-id: 123-prorate-plan-changes
-title: Prorate plan changes mid-cycle
-ticket:
-  system: gitlab                     # gitlab | github | linear
-  ref: billing/api#123               # or org/repo#123, or ENG-123
-  url: https://gitlab.example.com/billing/api/-/issues/123
-  snapshot:
-    content_sha256: 9c1e4b...        # sha256 of normalised title + description
-    updated_at: 2026-09-23T10:14:00Z # informational only, see 5.1
-    taken_by: jdoe
-    taken_at: 2026-09-23T11:02:00Z
+id: 2026-09-23-webhook-retries
+title: Webhook retries
+intent:
+  file: intent.md
+  content_sha256: 4f1c...            # hash of intent.md when the spec was written
+  recorded_at: 2026-09-23T11:02:00Z
+  recorded_by: jdoe
 revision: 2                          # bumped on every content change after first review
 state: active                        # active | superseded
-supersedes: []                       # e.g. [88-plan-change-billing]
-superseded_by: null                  # set by the PR that supersedes this spec
-related:
-  - billing/api#117
+supersedes: []                       # e.g. [2026-05-02-webhook-delivery]
+superseded_by: null                  # set when a later spec replaces this one
+related: []
 attachments:
   - threat-model.md
-  - sequence.png
 ---
 ```
 
-Field rules:
-
-| Field | Why it exists | Who sets it |
+| Field | Why it exists | Written by |
 |---|---|---|
-| `id` | Stable handle used in commit trailers and cross-links | Plugin at creation |
-| `ticket.system` / `ref` / `url` | Link back to the intent, on whatever tracker holds it | Plugin at creation |
-| `ticket.snapshot.content_sha256` | **The staleness anchor.** Compared against the live ticket by the pipeline | Plugin, on creation and on every sync or acknowledgement |
-| `ticket.snapshot.updated_at` | Human-readable context. Not used for staleness (labels, assignees and comments bump it on every tracker) | Plugin |
-| `taken_by` / `taken_at` | Who last confirmed the spec matches the ticket, and when | Plugin |
-| `revision` | Lets people say "spec r3" in comments and trailers | Plugin / engineer |
-| `state` | Only lifecycle the code host can't express: superseded | The superseding PR |
-| `supersedes` / `superseded_by` | Chain of custody across tickets | Plugin |
+| `id` | Stable handle for trailers, test citations and links | `specs new` |
+| `intent` | Which version of the intent the spec was written against, so a later edit is noticed | `specs new`, `specs intent record` |
+| `revision` | Lets people say "spec r3" in reviews and trailers | The engineer, through `/sdlc:sync` |
+| `state` | The one lifecycle the code host can't express: superseded | `specs new --supersedes` |
+| `supersedes` / `superseded_by` | The chain between a spec and its replacement | `specs new --supersedes` |
 
-Deliberately **absent**: `status: approved`, `approvers`, `pr`. The PR is found from the
-branch and the ticket; approval state is read from the code host. Storing them would
-create a second, drifting copy.
+Deliberately **absent**: `status: approved`, `approvers`, `pr`. The code host knows those;
+a copy would drift.
 
 ### 3.2 Body template
 
 ```markdown
-# Prorate plan changes mid-cycle
+# Webhook retries
 
-> Intent: [billing/api#123](https://gitlab.example.com/billing/api/-/issues/123).
-> This spec does not restate the ticket; read it first.
+> Intent: [intent.md](intent.md). The spec is the contract; the intent is the original request.
 
 ## Context
-What exists today and why the ticket needs more than the ticket says.
+What exists today, and what the request leaves out that the implementation needs.
 
 ## Goals
 ## Non-goals
 
 ## Acceptance criteria
-- **AC-1** Upgrading mid-cycle charges the prorated difference immediately.
-- **AC-2** Downgrading mid-cycle issues a credit applied to the next invoice.
-- **AC-3** Proration uses the subscription's billing anchor, not the calendar month.
+- **AC-1** Given a delivery that fails with a 5xx, when retries are enabled, then it is retried
+  3 times with 1, 4 and 16 second delays.
+- **AC-2** Given a delivery that fails with a 4xx, then it is not retried.
 
 ## Design
 Approach, data model changes, API changes, alternatives considered and why rejected.
 
 ## Risks and security
-Link `threat-model.md` when the change crosses a trust boundary.
+Link a threat model kept in this directory when the change crosses a trust boundary.
 
 ## Rollout and migration
 
 ## Open questions
-Each one names who must answer it. The spec is not approvable with open questions left.
+Each one names who must answer it. The spec isn't ready for review with open questions left.
 
 ## Decisions
-- 2026-09-24: Credits never expire. Source: [comment on the ticket](https://...)
+- 2026-09-24: Retries stop at the first 4xx. Source: review comment on the PR.
 
 ## Revisions
-- **r2** (2026-09-26, jdoe): Ticket updated to exclude annual plans. Non-goals and AC-3
-  updated. Trigger: ticket-updated.
+- **r2** (2026-09-26, jdoe): The intent now excludes internal webhooks. Non-goals updated.
 - **r1** (2026-09-23, jdoe): Initial spec.
 ```
 
 Two conventions carry most of the traceability:
 
-- **Acceptance criteria have stable IDs (`AC-n`).** Tests, commits and review comments cite
-  them. An AC is never renumbered; a removed AC is struck through with a reason.
-- **Decisions made in ticket comments are folded in with a link.** A decision that exists
-  only in a comment thread is invisible to the next reader and to the staleness check.
+- **Acceptance criteria have stable ids (`AC-n`).** Tests, commits and review comments cite
+  them. A number is never reused or renumbered; a dropped criterion is struck through with a
+  reason. Where people could disagree, write it as Given / When / Then with real values.
+- **Decisions made elsewhere are folded in with their source.** A decision that exists only in
+  a thread is invisible to the next reader.
 
-### 3.3 `ticket.snapshot.md`
+### 3.3 `intent.md`
 
-Generated by the plugin whenever the snapshot hash is taken; never edited by hand
-(`spec-lint` rejects a snapshot file whose hash doesn't match the frontmatter).
+The intent is written by whoever has the problem, often with Claude's help, in their own
+words. The template follows the playbook:
 
 ```markdown
-<!-- generated by tools/specs; do not edit -->
-<!-- ticket: billing/api#123  sha256: 9c1e4b...  taken: 2026-09-23T11:02:00Z -->
-# Prorate plan changes mid-cycle
-
-<normalised ticket description>
+# Intent: claims status self-service
+Author: J. Ortiz (claims operations). Status: draft.
+## Problem
+Customers phone the contact center to ask where their claim is.
+Handlers spend roughly a third of call time on status-only queries.
+## Proposed outcome
+Customers see claim status, next step and expected date in the portal.
+## Affected users and systems
+Claims handlers, portal team, claims-core API.
+## Constraints
+No new PII in the portal session. Existing authentication only.
+## Open questions
+Do third-party loss adjusters need access too?
 ```
 
-Why keep it, given principle 1:
+`/sdlc:start` assesses an intent against these sections and lists its gaps: a missing problem
+statement, an outcome nobody could check, a solution written as the problem. It then offers to
+improve the intent together, or to proceed as it is. Both are fine: a thin intent produces a
+spec with more open questions, which `/sdlc:clarify` works down.
 
-- **Uniform diffs.** When the ticket changes, the staleness check diffs the live ticket
-  against this file. Description history is uneven across trackers (available on some,
-  tier-gated on others, missing from some APIs); this makes the diff identical everywhere.
-- **Evidence.** It records exactly what intent the spec was approved against, which
-  survives the ticket being edited, moved or the tracker being replaced.
-
-It isn't a second source of truth, because nobody writes to it. It's a receipt.
+The spec records a hash of `intent.md`. When the intent is edited later, `/sdlc:check` says so
+and `/sdlc:sync` shows the change (section 5.1).
 
 ---
 
@@ -251,276 +230,233 @@ It isn't a second source of truth, because nobody writes to it. It's a receipt.
 
 ```mermaid
 flowchart TD
-    A["Ticket labelled spec-required<br/>moved to Ready"] --> B["/sdlc:start ticket<br/>branch, spec draft,<br/>snapshot taken"]
-    B --> C["/sdlc:clarify<br/>open questions posted<br/>to the ticket"]
-    C --> D["/sdlc:propose<br/>spec-only commit<br/>Draft PR linked to ticket"]
-    D --> E{"Spec approvers<br/>(code owners)"}
+    A["A request: intent.md,<br/>a file, or pasted text"] --> B["/sdlc:start<br/>assess the intent, offer help,<br/>create the spec, draft it"]
+    B --> C["/sdlc:clarify<br/>open questions to decisions"]
+    C --> D["/sdlc:propose<br/>readiness check,<br/>text for a spec-only draft PR"]
+    D --> E{"Spec reviewers<br/>(code owners)"}
     E -->|"request changes"| C
     E -->|"approve"| F["/sdlc:plan<br/>plan.local.md"]
-    F --> G["/sdlc:implement<br/>code + tests cite AC-n"]
-    G --> H["/sdlc:converge<br/>AC coverage vs diff"]
-    H --> I["Mark PR ready<br/>code review"]
-    I --> J["Merge: spec frozen,<br/>ticket closes"]
+    F --> G["/sdlc:implement<br/>code and tests cite AC-n"]
+    G --> H["/sdlc:converge<br/>criteria vs the diff"]
+    H --> I["Mark the PR ready,<br/>code review"]
+    I --> J["Merge: the spec is frozen"]
 ```
 
 ### Step by step
 
-1. **Pick up the ticket.** It must carry the `spec-required` label (set at refinement).
-   Tickets without it go straight to implementation with a normal PR.
-2. **`/sdlc:start <ticket>`**
-   - Reads the ticket (title, description, labels, linked tickets, recent comments) through
-     the tracker adapter (section 10).
-   - Creates the branch from the default branch, named per section 2.
-   - Creates `specs/<ticket-key>-<slug>/spec.md` from the template, takes the snapshot
-     (frontmatter hash + `ticket.snapshot.md`).
-   - Drafts the spec body with Claude, grounded in the ticket and the codebase.
-3. **`/sdlc:clarify`** works ambiguities down to decisions. Questions only the PM can answer
-   are posted as a single comment on the ticket; answers are folded into `## Decisions` with
-   a link. If the answer changes scope, the PM edits the ticket description (principle 2).
-4. **`/sdlc:propose`** commits the spec alone and opens a **Draft PR**:
-   - Title: `Draft: Spec for <ticket-key>: Prorate plan changes mid-cycle`
-   - Description from the PR template, including the closing keyword for the tracker
-     (section 10).
-   - Commit format in section 7.
-5. **Spec approval via code owners.** `CODEOWNERS` routes `specs/` changes to the spec
-   approvers. Reviewers read the rendered markdown in the PR and comment inline. PMs never
-   touch git; they review in the code host's web UI.
-6. **Only after spec approval, start code.** `/sdlc:plan` writes `plan.local.md`;
-   `/sdlc:implement` works from the approved spec and the plan. Commits and tests cite
-   `AC-n`.
-7. **`/sdlc:converge`** before marking the PR ready: every AC has evidence (test, code),
-   and every changed file is justified by some AC. Findings go in a PR comment.
-8. **Mark ready, code review, merge.** The spec on the default branch is now the frozen
-   record of this change.
+1. **Decide the change deserves a spec.** Substantial changes do; small fixes go straight to a
+   normal PR.
+2. **`/sdlc:start`** with an `intent.md`, a file, or the request pasted in. It assesses the
+   intent and offers help, offers a branch named after the spec when you're on the default
+   branch, creates `specs/<id>/` through the helper, and drafts `spec.md` with you, grounded in
+   the intent and the codebase.
+3. **`/sdlc:clarify`** works open questions down to decisions, folded into `## Decisions` with
+   their source.
+4. **`/sdlc:propose`** checks the spec is ready for review (no open questions, lint clean, the
+   intent hash recorded) and writes the title and description for a spec-only draft PR. You
+   commit, push and open the PR.
+5. **Spec review through code owners.** Reviewers read the rendered markdown in the PR and
+   comment inline; product people review in the code host's web UI.
+6. **After the spec is approved, write code.** `/sdlc:plan` writes `plan.local.md`;
+   `/sdlc:implement` works from the approved spec. Commits and tests cite `AC-n`.
+7. **`/sdlc:converge`** before marking the PR ready: every criterion has evidence, and every
+   changed file serves some criterion.
+8. **Mark ready, review, merge.** The spec on the default branch is now the frozen record.
+
+Run `/sdlc:check` before committing spec changes: it runs the plugin's lint, reports criteria
+no test cites yet, and says whether the intent changed. Its findings are advice.
 
 ### Code owners and approval
 
-`CODEOWNERS` (same syntax on both hosts for this use):
+The team applies these settings on its code host; `/sdlc:init` only prints them. Route spec
+changes to spec reviewers with `CODEOWNERS` (same syntax on both hosts):
 
 ```
 /specs/ @acme/spec-approvers
 ```
 
-What we need from the code host, regardless of which one:
+What a team usually wants:
 
-| Requirement | Why |
+| Want | Why |
 |---|---|
-| **R1** Changes under `specs/` need a spec approver's approval | Spec approval is mandatory, not advisory |
-| **R2** Pushing code does **not** invalidate the spec approval | Otherwise every code push forces a spec re-review |
-| **R3** Changing the spec **does** invalidate the spec approval | Our amendment mechanism: any later spec edit is re-approved |
-| **R4** Required checks pass before merge, evaluated against the merge result | Staleness is checked against the ticket at merge time |
-| **R5** The merge commit keeps the traceability trailers | Squashing must not drop the links |
+| **R1** Changes under `specs/` need a spec reviewer's approval | The spec is the contract; someone other than the author agrees to it |
+| **R2** Pushing code doesn't throw away the spec approval | Otherwise every code push asks for a spec re-review |
+| **R3** Changing the spec does | An amended contract is agreed to again |
+| **R5** The merged commit keeps the trailers | Squashing must not drop the links |
 
-How each host meets them is in section 10. The short version: GitLab meets R3 with a
-built-in setting; GitHub can't dismiss approvals per path, so R3 is met by the
-`spec-approval` pipeline check (section 6), which works on both hosts and is the portable
-default.
+How each host gets there is in section 10.2. In short: GitLab can reset only the code owners'
+approvals when their files change, which gives R2 and R3 together. GitHub can't reset per path,
+so a team chooses between resetting all approvals on every push (R3 without R2) and relying on
+reviewers noticing spec changes in the diff (R2 without R3).
 
-**Spec approved before code:** start as a team convention. If it's routinely skipped, add
-the optional `spec-gate` job (section 6). Tooling can't fix a culture of "approve
-everything at the end"; the team has to agree to review the spec first.
-
-**Who approves:** a group per area (PM, tech lead, or a peer, per team). Approvers must be
-eligible on the code host (section 10); check that PMs have the access this requires.
+**Spec approved before code:** a team convention. Tooling can't fix a habit of approving
+everything at the end; the team has to agree to review the spec first.
 
 ---
 
-## 5. Staleness and convergence
+## 5. When the intent changes, and convergence
 
-Two directions of drift, two checks.
+Two directions of drift:
 
-| Direction | Question | Check | Where it runs |
-|---|---|---|---|
-| **Upstream**: ticket → spec | Was the spec written against the ticket as it reads now? | `spec-staleness` | Pipeline (hard gate), nightly schedule, `/sdlc:check` locally |
-| **Downstream**: spec → code | Does the diff do what the spec says, and only that? | `/sdlc:converge` | Locally before ready; optionally a Claude review job in the pipeline |
+| Direction | Question | Where it's answered |
+|---|---|---|
+| **Upstream**: intent → spec | Was the spec written against the intent as it reads now? | `/sdlc:check`, `/sdlc:sync`, the session status line |
+| **Downstream**: spec → code | Does the diff do what the spec says, and only that? | `/sdlc:converge` |
 
-### 5.1 Upstream staleness (ticket → spec)
+### 5.1 Upstream: the intent changed
 
-**The anchor is a content hash, not `updated_at`.** On every tracker, `updated_at` moves on
-label, assignee, state or comment changes and would make every spec permanently stale.
+The spec records `sha256` of `intent.md`, normalised (line endings unified, trailing whitespace
+and blank edges trimmed, nothing else touched). The plugin compares it with the file as it is
+now:
 
-```
-content_sha256 = sha256( normalise(title) + "\n\n" + normalise(description) )
-normalise = CRLF→LF, trim trailing whitespace per line, trim leading/trailing blank lines
-```
-
-Linear descriptions are markdown like the others; the adapter fetches the markdown field,
-not rendered HTML, so the hash is stable.
-
-The algorithm (one script, shared by the pipeline and the plugin, in `tools/specs/`):
-
-1. For every `specs/*/spec.md` changed in the PR, **plus the spec of the PR's own ticket**
-   (so a code-only push still gets checked):
-2. Fetch the ticket through the tracker adapter, compute `content_sha256`.
-3. Equal to `ticket.snapshot.content_sha256` → **fresh**.
-4. Different → **stale**. Fail with the diff between `ticket.snapshot.md` and the live
-   ticket, and the two resolutions: update the spec, or acknowledge.
-5. Specs with `state: superseded` are skipped.
-
-Staleness states:
+- `/sdlc:check` and the session status line report `intent changed`.
+- `/sdlc:sync` shows what changed since the spec recorded it (from git history) and walks the
+  engineer through it.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Fresh: /sdlc:start takes snapshot
-    Fresh --> Stale: ticket title or description edited
-    Stale --> Fresh: acknowledge (no impact)<br/>snapshot bumped, revision note
-    Stale --> Fresh: amend (impact)<br/>spec updated, revision++, snapshot bumped
-    Fresh --> Frozen: PR merged
+    [*] --> Current: /sdlc:start records the intent
+    Current --> Changed: intent.md edited
+    Changed --> Current: acknowledge (no impact)<br/>hash re-recorded, revision note
+    Changed --> Current: amend (impact)<br/>spec updated, revision++, hash re-recorded
+    Current --> Frozen: PR merged
     Frozen --> Superseded: follow-up spec merged
 ```
 
-Both resolutions change `spec.md`, so both invalidate the spec approval (R3). That's
-intended: "still valid" is a claim someone other than the author confirms. For an
-acknowledgement the diff is a few lines, so the re-approval takes seconds.
+Both resolutions change `spec.md`, so reviewers see them; on GitLab with the setting in 10.2 the
+spec approval resets too. For an acknowledgement the diff is a few lines.
 
-### 5.2 Downstream convergence (spec → code)
+### 5.2 Downstream: convergence
 
-`/sdlc:converge` reads the approved spec and the PR diff and reports per AC:
+`/sdlc:converge` reads the spec and the branch diff and reports per criterion:
 
 | Verdict | Meaning | Action |
 |---|---|---|
-| `COVERED` | Implementation and a test citing the AC exist | None |
-| `UNTESTED` | Implementation found, no test cites the AC | Add the test or justify |
-| `MISSING` | No implementation found | Implement, or amend the spec (re-approval) |
-| `CONTRADICTED` | Code behaves differently from the AC | Fix the code or amend the spec |
-| `UNJUSTIFIED` | Changed files not traceable to any AC | Scope creep: remove, split to another ticket, or amend |
+| `COVERED` | Implementation and a test citing the criterion exist | None |
+| `UNTESTED` | Implementation found, no test cites the criterion | Add the test or justify |
+| `MISSING` | No implementation found | Implement, or amend the spec |
+| `CONTRADICTED` | Code behaves differently from the criterion | Fix the code or amend the spec |
+| `UNJUSTIFIED` | Changed files no criterion accounts for | Remove, split out, or amend |
 
-It is **read-only**: it reports, and the engineer decides. It never edits the spec to
-match the code, because that turns a finding into a silent amendment.
+It is **read-only**: it reports, the engineer decides. It never edits the spec to match the code,
+because that turns a finding into a silent amendment.
 
-A deterministic subset can run in the pipeline: every non-struck `AC-n` in the spec is
-cited by at least one test, in a test name or comment, as `<ticket-key>:AC-n` (for example
-`123:AC-2` or `ENG-123:AC-2`). The ticket key qualifies it because every spec has an AC-1.
-Commits don't need the qualifier: their `Spec` trailer already names the spec. The judgement part (`CONTRADICTED`,
-`UNJUSTIFIED`) is a Claude review, either locally or via a pipeline review job
-(`claude-code-action` on GitHub, or the equivalent job on GitLab).
+Tests cite a criterion as `<spec-id>:AC-n` in a test name or comment, for example
+`2026-09-23-webhook-retries:AC-2`; the id qualifies the number because every spec has an AC-1.
+Commits don't need the qualifier: their `Spec` trailer names the spec.
 
 ---
 
-## 6. Pipeline jobs
+## 6. Optional: checks in your own CI
 
-| Job | Runs when | Blocking | What it does |
-|---|---|---|---|
-| `spec-required` | PR pipelines | Yes | If the PR's ticket has `spec-required`, a `specs/<ticket-key>-*/spec.md` must exist in the PR or on the default branch |
-| `spec-lint` | `specs/**` changed | Yes | Frontmatter schema, required sections, unique never-renumbered `AC-n`, no open questions when not draft, attachments exist, `revision` bumped when body changed, `ticket.snapshot.md` matches the hash |
-| `spec-staleness` | PR pipelines, and on the merge result (R4) | Yes | Section 5.1 |
-| `spec-approval` | PR pipelines, and on review events | Yes on GitHub, optional on GitLab | R3 made portable: passes only if a spec approver approved the PR **at or after** the last commit touching the spec directory |
-| `spec-staleness-nightly` | Scheduled | No | Runs 5.1 over every open PR and comments on stale ones, so drift surfaces before the next push. Also flags merged specs whose ticket changed after merge (section 8, case D) |
-| `ac-coverage` | Code changed in a PR with a spec | Warn first, then yes | Deterministic subset of 5.2 |
-| `spec-gate` | Optional | Warn | Non-spec files changed before `spec-approval` passed |
-| build/test jobs | **Not** on spec-only changes | n/a | Path filters exclude `specs/**`-only pushes, so spec edits don't cost a full pipeline (see the GitHub caveat in section 10) |
+The plugin ships no CI jobs and nothing it checks blocks a merge. A team that wants some rules
+enforced can run the plugin's helper in its own pipeline from a checkout of the plugin; it needs
+Python 3.10+ and PyYAML, and no network access.
 
-Credentials: the staleness jobs need read access to the tracker (and, for Linear, an API
-key stored as a pipeline secret); the nightly job needs write access to comment on tickets
-and PRs; `spec-approval` needs read access to PR reviews and team membership. On GitHub,
-reading team membership needs `read:org`, which the default `GITHUB_TOKEN` lacks: use a
-GitHub App token, or list approvers as usernames in `specs/config.yml`.
+| Idea | Command | Notes |
+|---|---|---|
+| Spec lint on changed specs | `tools/specs/specs lint --changed-since <base>` | Exits 1 on findings; add `--ready` once a PR leaves draft |
+| Criteria never removed, revision bumped | `tools/specs/specs lint --base <base>` | Compares each spec with its version at the base |
+| Intent changed since the spec | part of `lint` (rule L016) | Reports specs whose `intent.md` moved on |
+| Every criterion cited by a test | `tools/specs/specs coverage` | Start as a warning; it can't tell whether a test really exercises the criterion |
+| Spec-only pushes skip the build | Path filters on `specs/**` | See the GitHub caveat in 10.2 |
+
+The first version of this workflow ran such checks as blocking jobs, including a check that
+every ticket labelled `spec-required` had a spec, a staleness check against the live ticket, a
+`spec-approval` check reading PR reviews, and a nightly job. They need tracker and code host
+access, which the plugin doesn't have; teams can build them on their side if they want them.
 
 ---
 
 ## 7. Commit and PR conventions
 
-Commit history must answer, without opening any other tool: *which ticket, which spec
-revision, which acceptance criteria, and why*.
+History should answer, without opening another tool: *which spec, which revision, which
+criteria, and why*.
 
 ### 7.1 Spec commits
 
 ```
-spec(123): r2 exclude annual plans from proration
+spec(2026-09-23-webhook-retries): r2 exclude internal webhooks
 
-The ticket was updated on 2026-09-26 to exclude annual plans (PM decision in
-the refinement call). Non-goals now list annual plans; AC-3 is limited to
-monthly anchors. No AC was added or removed.
+The intent now excludes internal webhooks (product decision on 2026-09-26).
+Non-goals list them; no criterion was added or removed.
 
-Refs: billing/api#123
-Spec: 123-prorate-plan-changes@r2
-Spec-Change: ticket-updated
-Ticket-Snapshot: 9c1e4b7
+Spec: 2026-09-23-webhook-retries@r2
+Spec-Change: acknowledge
 ```
 
-`Refs` holds the full ticket reference as the tracker writes it (`billing/api#123`,
-`acme/api#123` or `ENG-123`), so the code host and the tracker both auto-link it.
+`Spec-Change` is one of:
 
-`Spec-Change` is one of `initial`, `review-feedback`, `ticket-updated`,
-`ticket-acknowledged`, `implementation-finding`, `supersede`.
+- `initial`: the first version of the spec.
+- `clarify`: open questions answered or wording tightened, criteria unchanged in meaning.
+- `amend`: criteria added, struck or changed in meaning, with a revision bump.
+- `acknowledge`: the intent changed and the spec still holds.
+- `supersede`: the spec is replaced by another.
 
 ### 7.2 Code commits
 
 ```
-feat(billing): credit mid-cycle downgrades on the next invoice
+feat(webhooks): retry 5xx deliveries with backoff
 
-Downgrades now create a credit line instead of refunding, because refunds
-through the payment provider cost a fee per transaction (see spec Design).
-The credit is applied before tax.
+Retries back off 1, 4 and 16 seconds so a struggling receiver isn't hammered;
+4xx responses are final, as the spec's Decisions record.
 
-Refs: ENG-123
-Spec: eng-123-prorate-plan-changes@r2
-Implements: AC-2
+Spec: 2026-09-23-webhook-retries@r2
+Implements: AC-1, AC-2
 ```
 
-Trailers are machine-readable (`git log --format='%(trailers:key=Implements)'`), so
-"which commits implemented AC-2" and "which commits were written against spec r1" are
-one command each, on any host.
+Trailers are machine-readable (`git log --format='%(trailers:key=Implements)'`), so "which
+commits implemented AC-2" and "which commits were written against r1" are one command each.
 
 ### 7.3 PR
 
-- Title: `Draft: Spec for <ticket-key>: ...` while spec-only, then `<ticket-key>: ...` once
-  code lands.
-- Description (template): the tracker's closing keyword and ticket reference, a link to the
-  spec file on the branch, current revision, the latest `/sdlc:converge` summary, and a
-  `## Revisions` excerpt when the spec changed after first approval.
-- **Squash policy (R5):** if we squash, the squash message must carry `Refs`, `Spec` and
-  the union of `Implements` trailers, or per-commit traceability is lost at merge. The PR
-  itself keeps the full history either way. How to configure it per host is in section 10.
+- Title: `Draft: Spec for <spec title>` while spec-only, then the change's title once code lands.
+- Description: the spec and its revision, the criteria implemented, the latest converge summary,
+  and a note when the spec changed after its first approval.
+- **Squash merges (R5):** the squashed message must keep `Spec` and the `Implements` trailers;
+  section 10.2 has the settings.
 
 ---
 
-## 8. When the ticket is updated
+## 8. When the intent is updated
 
-Updating the ticket is always legitimate; it's the PM's source of truth. What varies is how
-far the work has progressed.
+Editing the intent is always legitimate. What varies is how far the work has gone.
 
 | Case | Where the work is | What happens | Who acts |
 |---|---|---|---|
-| **A** | No spec yet | Nothing. `/sdlc:start` will snapshot the latest version | n/a |
-| **B** | Spec in Draft PR, not yet approved | `/sdlc:sync`: diff the ticket, update the spec, retake the snapshot, bump the revision. Normal review continues | Engineer |
-| **C1** | Spec approved, code in progress, change **has no impact** | The pipeline (or nightly comment) flags stale. `/sdlc:sync` classifies as no-impact, retakes the snapshot, adds a revision note with `Spec-Change: ticket-acknowledged`. Spec approvers re-approve a few-line diff | Engineer, then approver |
-| **C2** | Spec approved, code in progress, change **has impact** | `/sdlc:sync` proposes the spec changes (which ACs are touched). Engineer amends, `revision++`, `Spec-Change: ticket-updated`. Re-approval, then `/sdlc:converge` shows which code is now `CONTRADICTED` or `MISSING` | Engineer, then approver |
-| **D** | PR merged, spec frozen | Don't edit the merged spec. The nightly job comments on the ticket: "this ticket changed after its spec merged; open a follow-up". The follow-up ticket gets a new spec with `supersedes: [<old id>]`; its PR sets `superseded_by` on the old spec | PM opens follow-up, engineer specs it |
+| **A** | No spec yet | Nothing. `/sdlc:start` records the current intent | n/a |
+| **B** | Spec in review, not approved | `/sdlc:sync`: show the change, update the spec, re-record the hash, bump the revision | Engineer |
+| **C1** | Spec approved, code in progress, **no impact** | `/sdlc:sync` classifies it as no impact, re-records the hash, adds a revision note, `Spec-Change: acknowledge`. Reviewers glance at a few-line diff | Engineer, then reviewers |
+| **C2** | Spec approved, code in progress, **impact** | `/sdlc:sync` shows which criteria are touched. The engineer amends, `revision++`, `Spec-Change: amend`. Review again, then `/sdlc:converge` shows what code is now `CONTRADICTED` or `MISSING` | Engineer, then reviewers |
+| **D** | PR merged, spec frozen | Don't edit the merged spec. Start a follow-up spec with `--supersedes <old id>`, which marks the old one superseded | Engineer |
 
-Case D matters most on trackers where a closed ticket stays easy to edit (all three).
+Case D is only noticed when someone looks: the status line or `/sdlc:check` on a branch for
+that spec, or a reader of the intent.
 
-### Scope change discovered by the engineer
+### The spec turns out wrong, or the scope was missed
 
-The same flow in reverse order. The engineer finds during implementation that the ticket
-is wrong or incomplete:
-
-1. Propose the change on the ticket (comment, or `/sdlc:sync --propose` drafts it).
-2. The PM (or the engineer, if the team allows) edits the ticket description.
-3. The spec is now stale, which is correct: continue as case C2 with
-   `Spec-Change: implementation-finding`.
-
-Never amend the spec first and leave the ticket behind. The ticket stays the intent.
+- **The spec is wrong, the intent isn't** (a criterion is impossible, a design assumption fails):
+  `/sdlc:sync` handles it like C2, with the reason in the revision entry.
+- **The engineer finds scope the intent didn't ask for:** draft a note for the intent's author.
+  Don't widen the spec on your own; when the intent changes, continue as C2.
 
 ```mermaid
 sequenceDiagram
-    participant PM
-    participant Ticket as Tracker
-    participant CI as Pipeline
+    participant Author as Intent author
+    participant Repo as intent.md
     participant Eng as Engineer + plugin
-    participant Appr as Spec approvers
+    participant Rev as Spec reviewers
 
-    PM->>Ticket: edit description
-    CI->>Ticket: nightly / PR pipeline fetch
-    CI-->>Eng: spec-staleness FAILED (diff attached)
-    Eng->>Eng: /sdlc:sync classifies impact
+    Author->>Repo: edit the intent
+    Eng->>Eng: /sdlc:check or status line: intent changed
+    Eng->>Eng: /sdlc:sync shows the change, classifies impact
     alt no impact
-        Eng->>Eng: retake snapshot, revision note
+        Eng->>Eng: re-record the hash, revision note
     else impact
-        Eng->>Eng: amend spec, revision++
+        Eng->>Eng: amend the spec, revision++
     end
-    Eng->>Appr: push spec change (spec approval invalidated)
-    Appr-->>Eng: re-approve
+    Eng->>Rev: push the spec change
+    Rev-->>Eng: review again
     Eng->>Eng: /sdlc:converge, adjust code
 ```
 
@@ -528,110 +464,57 @@ sequenceDiagram
 
 ## 9. The Claude plugin (`sdlc`)
 
-Built from the SDD plugin's useful commands, minus its personal-workflow assumptions:
-no nested spec repo, no phases, no task files, no commit-blocking Stop hooks. The plugin
-only reads and writes things that the tracker, the code host and the repo already own.
+Built from the `sdd` plugin's useful commands, without its personal-workflow assumptions: no
+nested spec repo, no phases, no task files, no blocking hooks. It reads and writes only the
+repository; it doesn't call the tracker or the code host, and it touches no CI.
 
 **Design rules:**
 
-- Every check the plugin runs is the same script the pipeline runs (`tools/specs/`,
-  committed in the product repo). The plugin makes the workflow fast; the pipeline makes
-  it true.
-- Commands never name a system. They call the tracker and code host adapters selected by
-  `specs/config.yml`.
+- Anything that must be exact (parsing, lint, ids, hashes, coverage) is done by one helper
+  inside the plugin, `tools/specs/specs`, and never re-done in prose by a command.
+- Every finding is advice.
 
 ### 9.1 Commands
 
-| Command | Based on (SDD) | What it does |
+| Command | Based on (`sdd`) | What it does |
 |---|---|---|
-| `/sdlc:init` | `bootstrap`, `spec-repo-init` | One-time per repo: ask which tracker and code host, write `specs/config.yml`, `specs/README.md`, the PR template, the `CODEOWNERS` entry, `.gitignore` entry, the pipeline includes for that host, and `tools/specs/`. Writes a short `## Specs` section into `CLAUDE.md` |
-| `/sdlc:start <ticket>` | `brainstorm`, `generate-specs` | Read the ticket, create the branch and the spec directory, take the snapshot, draft the spec. `--supersedes <id>` for follow-ups |
-| `/sdlc:clarify` | `clarify` | Work open questions down to decisions; post PM-only questions to the ticket as one comment; fold answers into `## Decisions` with links |
-| `/sdlc:analyze` | `analyze` | Read-only self-consistency check of one spec: AC vs non-goals, decisions vs design, open questions left, ACs that aren't testable |
-| `/sdlc:propose` | new | Commit the spec alone with a 7.1 message, push, open the Draft PR from the template |
-| `/sdlc:plan` | `plan` | Write `plan.local.md` from the approved spec. Warns if the spec is not yet approved (reads PR reviews) |
-| `/sdlc:implement` | `implement` | Implement from the approved spec and plan, test first, commits cite `AC-n` |
-| `/sdlc:check` | new | Run the pipeline's staleness, lint and approval scripts locally; show the ticket diff if stale |
-| `/sdlc:sync` | new | Handle a ticket update (section 8): diff, classify impact per AC, propose an acknowledgement or an amendment, retake the snapshot and bump the revision. `--propose` drafts a ticket edit when the engineer found the scope change |
-| `/sdlc:converge` | `converge` | Section 5.2: AC coverage vs the diff. Read-only; optionally posts the report as a PR comment |
-| `/sdlc:bug` | `bug` | Bug lane: reproduce, diagnose, fix, verify. No spec unless the ticket carries `spec-required` |
-| `/sdlc:commit-msg` | `commit-msg` | Commit message with the 7.1 / 7.2 trailers filled from the branch, spec and diff |
-| `/sdlc:pr-msg` | `pr-msg` | PR title and description from the spec, revisions and converge report, with the right closing keyword for the tracker |
-| `/sdlc:handoff` | `handoff` | When a ticket changes hands: posts the state of the work as a PR comment (not a local file), so the next engineer finds it where the work lives |
-
-Dropped from SDD: `generate-tasks`, `next-task`, `implement-next-task` (the board is the
-task list), `quick` (tickets without `spec-required` are the fast lane), `dashboard` (the
-tracker's boards and the code host's PR lists are the dashboard), `snapshot`,
-`project-overview`, `spec-repo-init`, `preflight` (folded into `init`).
+| `/sdlc:init` | `bootstrap` | Once per repository: writes `specs/config.yml`, the templates, a `.gitignore` entry and a `## Specs` section in `CLAUDE.md`; prints the `CODEOWNERS` entry and host settings to apply |
+| `/sdlc:start` | `brainstorm`, `generate-specs` | Assesses the intent and offers help, creates the spec directory, drafts the spec. `--supersedes <id>` for follow-ups |
+| `/sdlc:clarify` | `clarify` | Works open questions down to decisions, folded into `## Decisions` with their source |
+| `/sdlc:analyze` | `analyze` | Read-only check of one spec against itself and its intent |
+| `/sdlc:propose` | new | Readiness check, then the text for a spec-only draft PR |
+| `/sdlc:check` | new | The local lint before committing: spec lint, criteria citations, intent changes |
+| `/sdlc:sync` | new | Any spec change: the intent changed, or the spec turned out wrong (section 8) |
+| `/sdlc:plan` | `plan` | Writes `plan.local.md` from the spec |
+| `/sdlc:implement` | `implement` | Implements from the spec and plan, test first, commits cite `AC-n` |
+| `/sdlc:bug` | `bug` | Reproduce, diagnose, fix, verify, kept apart |
+| `/sdlc:converge` | `converge` | Section 5.2: criteria against the diff, read-only |
+| `/sdlc:handoff` | `handoff` | The state of the work as text for the PR, when a change changes hands |
+| `/sdlc:commit-msg` | `commit-msg` | Commit message with the section 7 trailers; lints `specs/` first when it changed |
+| `/sdlc:pr-msg` | `pr-msg` | PR title and description from the spec, its revisions and the converge report |
 
 ### 9.2 Skills
 
-| Skill | Based on (SDD) | Purpose |
-|---|---|---|
-| `workflow` | `practices` | This document, condensed: when a ticket earns a spec, the direction of truth, what never goes in a file |
-| `spec-template` | `spec-template` | The frontmatter schema and body template of section 3, with guidance per section |
-| `tracker-access` | new | Reading tickets and posting comments on GitLab, GitHub or Linear: which CLI or MCP server, ticket key formats, closing keywords, resolving the ticket from the branch |
-| `code-host-access` | new | PRs, reviews, approvals and comments on GitLab or GitHub; draft PRs; reading who approved and at which commit |
-| `staleness` | `tidying-spec-repos` (converge part) | The snapshot hash definition, the states in 5.1, how to classify impact, what acknowledge vs amend means |
-| `commit-conventions` | `commit-msg` | Trailers, `Spec-Change` values, squash rules per host |
-| `test-first` | `test-first` | Unchanged: failing test first, tests cite `AC-n` |
-| `receiving-review` | `receiving-review` | Unchanged: verify review findings before acting, including spec review comments |
-| `finishing-work` | `finishing-work` | Rewritten for PRs: what must be true before marking ready (fresh spec, spec approval current, converge clean, pipeline green) |
+| Skill | Purpose |
+|---|---|
+| `workflow` | This document, condensed: the model, which command when, calling the helper |
+| `spec-template` | The frontmatter and body of section 3, with guidance per section |
+| `intent-writing` | The intent's sections, assessing an intent, offering help without gating |
+| `commit-conventions` | Trailers, `Spec-Change` kinds, squash settings per host |
+| `test-first`, `receiving-review`, `finishing-work` | Ported from `sdd`, with tests citing `AC-n` |
 
 ### 9.3 Hooks
 
-Light, advisory, never blocking. Enforcement belongs to the pipeline.
+One, advisory: at session start in a repository with `specs/config.yml`, a single status line
+for the branch's spec (id, revision, lint findings, whether the intent changed). Silent
+elsewhere, never blocking, no network.
 
-| Hook | What it does |
-|---|---|
-| `SessionStart` | If the branch maps to a ticket with a spec, inject: spec id and revision, approval state, and whether the snapshot is stale. One line, so every session starts knowing where the work stands |
-| `PostToolUse` on edits to `specs/**/spec.md` | Remind to bump `revision` and add a `## Revisions` entry when the body changed after first review |
+### 9.4 The helper
 
-### 9.4 Repository-side tooling (not in the plugin)
-
-`/sdlc:init` vendors one small Python tool into the product repo. Every check is a
-subcommand of it, so the pipeline, the nightly job and the plugin run identical code:
-
-```
-tools/specs/
-├── specs                  # entry point: tools/specs/specs <subcommand>
-├── VERSION                # plugin version it was vendored from
-├── requirements.txt       # PyYAML only
-├── sdlc_specs/
-│   ├── cli.py             # lint | staleness | approval | required | coverage |
-│   │                      # snapshot | ticket | pr | nightly
-│   ├── config.py          # specs/config.yml
-│   ├── spec.py            # frontmatter, sections, AC parsing
-│   ├── snapshot.py        # normalisation, content hash, ticket.snapshot.md
-│   └── adapters/
-│       ├── tracker_gitlab.py
-│       ├── tracker_github.py
-│       ├── tracker_linear.py
-│       ├── host_gitlab.py
-│       └── host_github.py
-└── ci/
-    ├── gitlab-ci.yml      # included from .gitlab-ci.yml
-    └── github/            # reusable workflows called from .github/workflows/
-```
-
-Adapter interface (the whole platform surface):
-
-```python
-class Tracker:
-    def fetch(self, ref) -> Ticket: ...          # title, description (markdown), labels, url, updated_at
-    def comment(self, ref, body) -> None: ...
-    def closing_keyword(self, ref) -> str: ...   # "Closes #123", "Fixes ENG-123", ...
-
-class CodeHost:
-    def current_pr(self, branch) -> PR: ...
-    def reviews(self, pr) -> list[Review]: ...   # reviewer, state, commit reviewed
-    def is_member(self, user, group) -> bool: ...
-    def comment(self, pr, body) -> None: ...
-    def open_draft(self, branch, title, body) -> PR: ...
-```
-
-Keeping these in the repo means the rules are versioned with the code they govern, work
-for engineers who don't use Claude, and can't disagree between the plugin and the pipeline.
+`tools/specs/specs` ships inside the plugin and runs from there; nothing is copied into product
+repositories. Its subcommands: `init`, `new`, `lint`, `intent check|record|assess`, `coverage`,
+`status`. It needs Python 3.10+ and PyYAML, makes no network calls, and exits 0 (nothing to
+report), 1 (findings) or 2 (usage or configuration problem, one line saying which).
 
 ---
 
@@ -639,35 +522,36 @@ for engineers who don't use Claude, and can't disagree between the plugin and th
 
 ### 10.1 Tracker
 
+Tickets aren't read by the plugin yet: a request reaches it as `intent.md`, a file, or pasted
+text. Reading tickets through the tracker's MCP server is planned as a later alternative, with
+the same offer: "the ticket lacks context; turn it into a local `intent.md`, or keep working
+from the ticket?".
+
+What still matters when a team links tickets by hand:
+
 | Concern | GitLab Issues | GitHub Issues | Linear |
 |---|---|---|---|
-| Ticket key | `#123`, `group/project#123` | `#123`, `org/repo#123` | `ENG-123` |
-| Access for plugin | `glab` or GitLab MCP | `gh` or GitHub MCP | Linear MCP or GraphQL API |
-| Access for pipeline | Project/group access token (`read_api`, `api` to comment) | `GITHUB_TOKEN` (same repo) or a GitHub App token (other repos) | Linear API key as a pipeline secret |
-| `spec-required` marker | Label | Label | Label |
-| Branch from ticket | "Create merge request" gives `123-slug` | "Create a branch" gives `123-slug` | Copy git branch name; set the format to drop the username |
-| Link PR to ticket | Closing keyword in PR description, or branch name | Closing keyword in PR description | Ticket key in branch name or PR title/description (GitHub/GitLab integration) |
-| Closing keyword | `Closes #123` | `Closes #123` | `Fixes ENG-123` (Linear magic words) |
-| Close on merge | Native | Native | Integration moves the issue to Done (configurable) |
-| Description history | Available, tier-dependent | Via the edit history API | Not relied on; we diff `ticket.snapshot.md` everywhere |
+| Ticket reference | `#123`, `group/project#123` | `#123`, `org/repo#123` | `ENG-123` |
+| Link a PR to it | Closing keyword in the PR description | Closing keyword in the PR description | Key in the branch name or PR title (GitHub/GitLab integration) |
+| Closing keyword | `Closes #123` | `Closes #123` | `Fixes ENG-123` |
+
+When tickets live in another project than the code, qualify the reference
+(`Closes billing/api#123`), or the keyword refers to the code repository's own issue.
 
 ### 10.2 Code host
 
-| Requirement | GitLab | GitHub |
+| Want | GitLab | GitHub |
 |---|---|---|
 | `CODEOWNERS` location | root, `docs/` or `.gitlab/` | root, `docs/` or `.github/` |
-| **R1** spec approver required | Protected branch: "require code owner approval" (tier-dependent) | Branch protection or ruleset: "require review from Code Owners" (plan-dependent for private repos) |
-| **R2** code pushes keep the spec approval | Turn **off** "Remove all approvals when commits are added" | Turn **off** "Dismiss stale pull request approvals" |
-| **R3** spec edits invalidate the spec approval | Turn **on** "Remove approvals by Code Owners if their files changed" (tier-dependent), or use `spec-approval` | No per-path dismissal exists: make `spec-approval` a required check |
-| **R4** checks against the merge result | Merged results pipelines + "pipelines must succeed" | Merge queue (checks run on the merge group) + required checks |
-| **R5** trailers survive squash | Squash commit message template including the PR description or trailers | "Default squash message: pull request title and description" and keep trailers in the PR description |
+| **R1** a spec reviewer must approve | Protected branch: "Code owner approval" (Premium and above) | Branch protection or ruleset: "Require review from Code Owners" |
+| **R2** code pushes keep the spec approval | Leave "Remove all approvals when commits are added to the source branch" **off** | Leave "Dismiss stale pull request approvals when new commits are pushed" **off** |
+| **R3** spec edits reset the spec approval | Turn **on** "Remove approvals by Code Owners if their files changed" (Premium and above): resets only the approvals of the owners whose files changed | No per-path reset. Either turn **on** "Dismiss stale pull request approvals when new commits are pushed" (resets on every push, giving up R2), or leave it off and have reviewers check spec diffs |
+| **R5** trailers survive a squash | Squash commit message template including the MR description | Default squash message "Pull request title and description", trailers at the end of the description |
 | Draft PR | Draft merge request | Draft pull request |
-| Code owner eligibility | Needs a project role that allows approving | Code owners need write access to the repo |
-| Skip builds on spec-only pushes | `rules: changes` | `paths-ignore`, **but** a required workflow skipped by path filters stays pending and blocks the merge; filter inside the job instead, or make the build job report success when only `specs/**` changed |
-| Claude review job | Claude Code in a CI job | `claude-code-action` |
+| Code owner eligibility | A project role that can approve | Write access to the repository |
+| Skip builds on spec-only pushes | `rules: changes` | `paths-ignore`, **but** a required workflow skipped by path filters stays pending and blocks the merge; filter inside the job instead |
 
-Tier and plan names change; confirm each "tier-dependent" or "plan-dependent" row on our
-own instance before rollout.
+Tier and plan names change; confirm each row on your own instance.
 
 ---
 
@@ -675,22 +559,23 @@ own instance before rollout.
 
 | Decision | Options | Leaning |
 |---|---|---|
-| Directory name | `specs/` (visible, searched by default) vs `.specs/` (out of the way; some tools such as `rg` skip hidden paths by default) | Team preference; either works |
-| Who approves specs | PM, tech lead, peer, per area | One group to start; per-area routing later (per-ticket directories can't be routed by path, so this needs a label or a field in the frontmatter read by `spec-approval`) |
-| Enforce spec-before-code | Convention vs `spec-gate` job | Convention first, measure, then enforce |
-| R3 mechanism on GitLab | Built-in code owner reset vs `spec-approval` | `spec-approval` everywhere, for one mechanism across repos |
-| Squash merges | Squash with trailer template vs merge commits | Whichever we use today, with R5 configured |
-| Per-change vs living specs | Frozen per-ticket specs only, or also a living "how it works today" doc updated in the same PR | Per-change only to start; add living docs when their absence hurts |
-| Plugin writes to the ticket | Automatic comments vs engineer-confirmed | Engineer-confirmed |
-| Mixed setups | Linear tracker + GitHub/GitLab host is the likely common case; GitLab Issues + GitHub host is unlikely | Support all pairs in the adapters; test the pairs we use |
+| Directory name | `specs/` (visible, searched by default) vs `.specs/` (out of the way; some tools skip hidden paths) | Team preference; either works |
+| Who reviews specs | Product, tech lead, peer, per area | One group to start; per-area routing later |
+| Spec before code | Convention vs a team's own CI check | Convention first, measure, then decide |
+| R3 on GitHub | Reset on every push vs reviewers watching spec diffs | Try reviewers first; switch if spec edits slip through |
+| Squash merges | Squash with a trailer-preserving template vs merge commits | Whichever the team uses today, with R5 configured |
+| Per-change vs living specs | Frozen per-change specs only, or also a living "how it works today" doc | Per-change only to start |
+| Ticket input | `intent.md` only vs reading tickets through MCP | `intent.md` first; MCP later, as an alternative |
 
 ## 12. How we'll know it works
 
-- **Requirements rework after build starts:** count of `Spec-Change: ticket-updated` and
-  `implementation-finding` commits after the first code commit, per PR. From `git log`.
-- **Stale at merge:** should be zero; the pipeline blocks it.
-- **Spec-first rate:** share of PRs where the spec approval precedes the first code commit.
-- **Converge findings at review time:** `UNJUSTIFIED` and `MISSING` counts should fall as
-  specs get sharper.
-- **Ceremony cost:** median time from Draft PR to spec approval. If it grows past a day,
-  the gate is too heavy and people will start skipping it.
+- **Intent changes after the spec was written:** count of `Spec-Change: acknowledge` and
+  `amend` commits after the first code commit, per spec. From `git log`.
+- **Changed intents caught before merge:** share of such changes resolved through `/sdlc:sync`
+  before the PR merged.
+- **Spec-first rate:** share of PRs where the spec was approved before the first code commit,
+  measured by hand during the pilot.
+- **Converge findings at review time:** `UNJUSTIFIED` and `MISSING` counts should fall as specs
+  get sharper.
+- **Ceremony cost:** median time from draft PR to spec approval. If it grows past a day, the
+  process is too heavy and people will skip it.
