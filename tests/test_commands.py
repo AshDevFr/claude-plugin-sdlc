@@ -222,6 +222,20 @@ class IntentCommandTest(unittest.TestCase):
         self.assertIn("/sdlc:start", self.text)
 
 
+class StartFromIntentTest(unittest.TestCase):
+    def setUp(self):
+        self.text = (COMMANDS / "start.md").read_text(encoding="utf-8")
+
+    def test_an_intent_written_ahead_keeps_its_id(self):
+        self.assertIn("intents/YYYY-MM-DD-<slug>.md", self.text)
+        self.assertIn("intent only", self.text)
+        self.assertIn("--date <date>", self.text)
+
+    def test_the_id_uses_the_local_date(self):
+        # Spec ids take the engineer's local date; UTC would date an evening's spec tomorrow.
+        self.assertNotIn("date -u", self.text)
+
+
 class CheckerTest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
