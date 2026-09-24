@@ -20,6 +20,7 @@ NAMES = (
     "intent-changed-no-impact",
     "intent-changed-impact",
     "merged-spec-intent-change",
+    "converge-partial",
 )
 ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
@@ -77,6 +78,14 @@ class ScenarioTest(SandboxTestCase):
                     continue
                 check = self.helper("--json", "intent", "check", f"specs/{spec}")
                 self.assertEqual(json.loads(check.stdout)["state"], expected["intent"])
+                if "uncited" in expected:
+                    coverage = json.loads(self.helper("--json", "coverage", f"specs/{spec}").stdout)
+                    criteria = coverage["specs"][0]["criteria"]
+                    uncited = [c["ac"] for c in criteria if c["state"] == "uncited"]
+                    self.assertEqual(uncited, expected["uncited"])
+                if "changed_files" in expected:
+                    diff = self.git("diff", "--name-only", "main...HEAD").stdout.split()
+                    self.assertEqual(sorted(diff), sorted(expected["changed_files"]))
 
     def test_readme_states_the_expected_intent_state(self):
         for name in NAMES:
@@ -115,6 +124,8 @@ class RepoTest(SandboxTestCase):
             text=True,
         )
         self.assertEqual(tests.returncode, 0, tests.stderr)
+        # Running the tests leaves nothing to commit, as in any Python repo.
+        self.assertEqual(self.git("status", "--porcelain").stdout, "")
 
     def test_refuses_a_non_empty_directory(self):
         self.dir.mkdir()
