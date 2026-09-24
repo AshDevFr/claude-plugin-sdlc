@@ -281,16 +281,16 @@ changes to spec reviewers with `CODEOWNERS` (same syntax on both hosts):
 /specs/ @acme/spec-approvers
 ```
 
-What a team usually wants:
+The requirements (R1 to R4) a team usually sets on its code host:
 
-| Want | Why |
+| Requirement | Why |
 |---|---|
 | **R1** Changes under `specs/` need a spec reviewer's approval | The spec is the contract; someone other than the author agrees to it |
 | **R2** Pushing code doesn't throw away the spec approval | Otherwise every code push asks for a spec re-review |
 | **R3** Changing the spec does | An amended contract is agreed to again |
-| **R5** The merged commit keeps the trailers | Squashing must not drop the links |
+| **R4** The merged commit keeps the trailers | Squashing must not drop the links |
 
-How each host gets there is in section 10.2. In short: GitLab can reset only the code owners'
+Section 10.2 gives the GitLab and GitHub settings for each. In short: GitLab can reset only the code owners'
 approvals when their files change, which gives R2 and R3 together. GitHub can't reset per path,
 so a team chooses between resetting all approvals on every push (R3 without R2) and relying on
 reviewers noticing spec changes in the diff (R2 without R3).
@@ -419,7 +419,7 @@ commits implemented AC-2" and "which commits were written against r1" are one co
 - Title: `Draft: Spec for <spec title>` while spec-only, then the change's title once code lands.
 - Description: the spec and its revision, the criteria implemented, the latest converge summary,
   and a note when the spec changed after its first approval.
-- **Squash merges (R5):** the squashed message must keep `Spec` and the `Implements` trailers;
+- **Squash merges (R4):** the squashed message must keep `Spec` and the `Implements` trailers;
   section 10.2 has the settings.
 
 ---
@@ -552,13 +552,16 @@ When tickets live in another project than the code, qualify the reference
 
 ### 10.2 Code host
 
-| Want | GitLab | GitHub |
+The GitLab and GitHub settings that meet section 4's requirements R1 to R4, and other
+differences between the two.
+
+| Topic | GitLab | GitHub |
 |---|---|---|
 | `CODEOWNERS` location | root, `docs/` or `.gitlab/` | root, `docs/` or `.github/` |
 | **R1** a spec reviewer must approve | Protected branch: "Code owner approval" (Premium and above) | Branch protection or ruleset: "Require review from Code Owners" |
 | **R2** code pushes keep the spec approval | Leave "Remove all approvals when commits are added to the source branch" **off** | Leave "Dismiss stale pull request approvals when new commits are pushed" **off** |
 | **R3** spec edits reset the spec approval | Turn **on** "Remove approvals by Code Owners if their files changed" (Premium and above): resets only the approvals of the owners whose files changed | No per-path reset. Either turn **on** "Dismiss stale pull request approvals when new commits are pushed" (resets on every push, giving up R2), or leave it off and have reviewers check spec diffs |
-| **R5** trailers survive a squash | Squash commit message template including the MR description | Default squash message "Pull request title and description", trailers at the end of the description |
+| **R4** trailers survive a squash | Squash commit message template including the MR description | Default squash message "Pull request title and description", trailers at the end of the description |
 | Draft PR | Draft merge request | Draft pull request |
 | Code owner eligibility | A project role that can approve | Write access to the repository |
 | Skip builds on spec-only pushes | `rules: changes` | `paths-ignore`, **but** a required workflow skipped by path filters stays pending and blocks the merge; filter inside the job instead |
@@ -575,7 +578,7 @@ Tier and plan names change; confirm each row on your own instance.
 | Who reviews specs | Product, tech lead, peer, per area | One group to start; per-area routing later |
 | Spec before code | Convention vs a team's own CI check | Convention first, measure, then decide |
 | R3 on GitHub | Reset on every push vs reviewers watching spec diffs | Try reviewers first; switch if spec edits slip through |
-| Squash merges | Squash with a trailer-preserving template vs merge commits | Whichever the team uses today, with R5 configured |
+| Squash merges | Squash with a trailer-preserving template vs merge commits | Whichever the team uses today, with R4 configured |
 | Per-change vs living specs | Frozen per-change specs only, or also a living "how it works today" doc | Per-change only to start |
 | Ticket input | `intent.md` only vs reading tickets through MCP | `intent.md` first; MCP later, as an alternative |
 
