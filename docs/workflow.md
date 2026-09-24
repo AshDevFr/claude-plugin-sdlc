@@ -586,7 +586,7 @@ Tier and plan names change; confirm each row on your own instance.
 - **Changed intents caught before merge:** share of such changes resolved through `/sdlc:sync`
   before the PR merged.
 - **Spec-first rate:** share of PRs where the spec was approved before the first code commit,
-  measured by hand during the pilot.
+  measured by hand.
 - **Converge findings at review time:** `UNJUSTIFIED` and `MISSING` counts should fall as specs
   get sharper.
 - **Ceremony cost:** median time from draft PR to spec approval. If it grows past a day, the
