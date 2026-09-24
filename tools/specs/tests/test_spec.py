@@ -166,6 +166,11 @@ class FrontmatterErrorTest(OfflineTestCase):
             parse_spec_text("---\n- a\n---\n")
         self.assertEqual(ctx.exception.line, 2)
 
+    def test_heading_right_after_the_frontmatter_is_read(self):
+        spec = parse_spec_text("---\nid: x\n---\n# Title\n## Context\ntext\n")
+        self.assertEqual(spec.title, "Title")
+        self.assertIn("Context", spec.sections)
+
     def test_crlf_files_parse(self):
         text = spec_with({"Acceptance criteria": "- **AC-1** One.\n"}).replace("\n", "\r\n")
         spec = parse_spec_text(text)

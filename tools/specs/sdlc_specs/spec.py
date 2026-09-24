@@ -97,7 +97,8 @@ def parse_spec(path: Path) -> Spec:
 def parse_spec_text(text: str, path: Path | None = None) -> Spec:
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     frontmatter, end, key_lines = _frontmatter(lines, path)
-    title, sections, all_sections = _sections(lines, start=end + 1)
+    # `end` is the closing ---'s 1-based line number, i.e. the 0-based index of the next line.
+    title, sections, all_sections = _sections(lines, start=end)
 
     warnings: list[ParseWarning] = []
     criteria: list[AcceptanceCriterion] = []
