@@ -21,6 +21,7 @@ EXPECTED = {
     "analyze": True,
     "propose": True,
     "sync": True,
+    "converge": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -136,6 +137,16 @@ class SyncCommandTest(unittest.TestCase):
     def test_start_passes_supersedes_to_the_helper(self):
         start = (COMMANDS / "start.md").read_text(encoding="utf-8")
         self.assertRegex(start, r'specs" new [^\n]*--supersedes')
+
+
+class ConvergeCommandTest(unittest.TestCase):
+    def test_verdicts_and_read_only(self):
+        text = (COMMANDS / "converge.md").read_text(encoding="utf-8")
+        for verdict in ("COVERED", "UNTESTED", "MISSING", "CONTRADICTED", "UNJUSTIFIED", "UNCHECKED"):
+            with self.subTest(verdict=verdict):
+                self.assertIn(f"`{verdict}`", text)
+        self.assertIn("read-only", text)
+        self.assertIn('specs" --json coverage', text)
 
 
 class CheckerTest(unittest.TestCase):
