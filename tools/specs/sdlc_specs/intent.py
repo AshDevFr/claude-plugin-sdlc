@@ -16,14 +16,17 @@ from pathlib import Path
 from . import cli
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
 from .frontmatter import scalar, set_top_level_block
-from .new import INTENT_FILE, _author
+from .new import INTENT_FILE, _author, template_text
 from .output import Output
-from .snapshot import intent_sha256
-from .spec import SpecParseError, parse_spec_text
+from .snapshot import intent_sha256, normalise
+from .spec import _LIST_ITEM, Section, SpecParseError, _items, _sections, parse_spec_text
 
 UNCHANGED = "unchanged"
 CHANGED = "changed"
 NOT_RECORDED = "not recorded"
+
+OPEN_QUESTIONS = "Open questions"
+_NO_QUESTIONS = {"none", "none.", "n/a", "no open questions", "no open questions."}
 
 
 @dataclass(frozen=True)
@@ -115,6 +118,61 @@ def record(spec_dir: Path, root: Path) -> str:
     return digest
 
 
+def _section_text(section: Section) -> str:
+    return normalise("\n".join(text for _, text, _ in section.lines))
+
+
+def _questions(section: Section | None, guidance: str) -> list[str]:
+    """List items when there are any; otherwise each paragraph is one question."""
+    if section is None:
+        return []
+    items = [text for _, _, text in _items(section, _LIST_ITEM)]
+    if not items:
+        paragraphs, current = [], []
+        for _, text, in_fence in section.lines:
+            if text.strip() and not in_fence:
+                current.append(text.strip())
+            elif current:
+                paragraphs.append(" ".join(current))
+                current = []
+        if current:
+            paragraphs.append(" ".join(current))
+        items = paragraphs
+    return [q for q in items if q.lower() not in _NO_QUESTIONS and normalise(q) != guidance]
+
+
+def assess(text: str, template: str) -> tuple[list[tuple[str, str]], list[str]]:
+    """Per-section state (`missing`, `empty`, `template`, `ok`) against the template, and the
+    open questions. Judges presence only; what the content says is for a person to judge."""
+    template_lines = template.replace("\r\n", "\n").split("\n")
+    _, template_sections, _ = _sections(template_lines, 0)
+    guidance = {name: _section_text(section) for name, section in template_sections.items()}
+
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    title, sections, _ = _sections(lines, 0)
+    preamble = [
+        line for line in lines[: next((i for i, ln in enumerate(lines) if ln.startswith("## ")), len(lines))]
+    ]
+    states = [
+        ("Title", "ok" if title else "missing"),
+        ("Author", "ok" if any(line.startswith("Author:") for line in preamble) else "missing"),
+    ]
+    for name in template_sections:
+        section = sections.get(name)
+        if section is None:
+            state = "missing"
+        else:
+            content = _section_text(section)
+            if not content:
+                state = "empty"
+            elif guidance[name] and content == guidance[name]:
+                state = "template"
+            else:
+                state = "ok"
+        states.append((name, state))
+    return states, _questions(sections.get(OPEN_QUESTIONS), guidance.get(OPEN_QUESTIONS, ""))
+
+
 def _spec_dir(root: Path, raw: str) -> Path:
     path = Path(raw).resolve()
     if path.is_file():
@@ -131,11 +189,16 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     check.add_argument("--diff", action="store_true", help="show the change since the recorded version")
     rec = sub.add_parser("record", help="record intent.md's current hash in the spec")
     rec.add_argument("spec_dir", metavar="SPEC_DIR")
+    ass = sub.add_parser("assess", help="which intent template sections are missing, empty or untouched")
+    ass.add_argument("spec_dir", metavar="SPEC_DIR", nargs="?")
+    ass.add_argument("--file", metavar="PATH", help="assess this file instead of a spec's intent")
 
 
 @cli.command("intent", help="the spec's record of its intent", configure=_configure, needs_config=True)
 def run(args: argparse.Namespace, out: Output) -> cli.Result:
     root = args.repo_root.resolve()
+    if args.intent_command == "assess":
+        return _run_assess(args, out, root)
     spec_dir = _spec_dir(root, args.spec_dir)
     rel = spec_dir.relative_to(root).as_posix()
 
@@ -155,3 +218,27 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         else:
             out.print(diff.rstrip("\n"))
     return cli.Result(exit_code=EXIT_OK if state.state == UNCHANGED else EXIT_CHECK_FAILED, data=data)
+
+
+def _run_assess(args: argparse.Namespace, out: Output, root: Path) -> cli.Result:
+    if bool(args.file) == bool(args.spec_dir):
+        raise UsageError("give either SPEC_DIR or --file")
+    if args.file:
+        path = Path(args.file)
+    else:
+        spec_dir = _spec_dir(root, args.spec_dir)
+        block = _intent_block(spec_dir, _spec_text(spec_dir))
+        path = spec_dir / (block.get("file") if isinstance(block.get("file"), str) else INTENT_FILE)
+    if not path.is_file():
+        raise UsageError(f"{args.file or path}: no such intent file")
+    states, questions = assess(
+        path.read_text(encoding="utf-8"), template_text(args.config, root, INTENT_FILE)
+    )
+    for name, state in states:
+        out.print(f"{name}: {state}")
+    out.print(f"Open questions: {len(questions)}")
+    for question in questions:
+        out.print(f"  - {question}")
+    return cli.Result(
+        data={"sections": [{"section": n, "state": st} for n, st in states], "open_questions": questions}
+    )

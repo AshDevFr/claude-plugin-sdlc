@@ -157,6 +157,7 @@ JSON output: `{"ok": true, "path": "specs/2026-09-23-webhook-retries", "id": "20
 ```sh
 tools/specs/specs intent check <spec-dir> [--diff]
 tools/specs/specs intent record <spec-dir>
+tools/specs/specs intent assess (<spec-dir> | --file <path>)
 ```
 
 `check` compares the intent file with the hash the spec recorded: `unchanged` (exit 0),
@@ -167,6 +168,12 @@ are included. If no committed version matches, it says so instead of guessing a 
 `record` stores the intent file's current hash in the spec's `intent` block (with who and
 when), rewriting only that block, and adds the block after `title` if the spec has none. It is
 what `/sdlc:sync` runs once the spec has been reviewed against the change.
+
+`assess` reports each intent template section as `missing`, `empty`, `template` (still the
+template's guidance) or `ok`, plus the title and Author line, and lists the open questions
+(list items, or one per paragraph when there are none). The sections come from the team's
+`specs/templates/intent.md` when it has one. It always exits 0: gaps are for the plugin to
+offer help with, never a failure.
 
 ## Development
 
