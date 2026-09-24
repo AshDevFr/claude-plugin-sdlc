@@ -15,6 +15,7 @@ NAMES = (
     "intent-sync",
     "test-first",
     "receiving-review",
+    "finishing-work",
 )
 PLATFORMS = ("GitLab", "GitHub", "Linear")
 SPEC_CHANGE_KINDS = ("initial", "clarify", "amend", "acknowledge", "supersede")
@@ -127,3 +128,34 @@ class PortedSkillsTest(unittest.TestCase):
         _, body = read("test-first")
         self.assertRegex(body, r"\b\d{4}-\d{2}-\d{2}-[a-z0-9-]+:AC-\d+\b")
         self.assertIn("<spec-id>:AC-n", body)
+
+
+class FinishingWorkTest(unittest.TestCase):
+    CHECK = ROOT / "tools" / "specs" / "sdlc_specs" / "check.py"
+    CONVERGE = ROOT / "commands" / "converge.md"
+
+    def test_checklist_covers_every_check_and_verdict(self):
+        # The checklist must not drift from the tools it describes: a new readiness reason or
+        # verdict without a checklist line fails here.
+        source = self.CHECK.read_text(encoding="utf-8")
+        own = re.search(r"_OWN_REASON = \{(.*?)\}", source, flags=re.S).group(1)
+        reasons = set(re.findall(r'"L\d+": "([^"]+)"', own)) | set(
+            re.findall(r'reasons\.append\("([^"]+)"\)', source)
+        )
+        # Verdicts are the backticked capitalised words; UNJUSTIFIED lives outside the table.
+        verdicts = set(re.findall(r"`([A-Z]{5,})`", self.CONVERGE.read_text(encoding="utf-8")))
+        self.assertGreaterEqual(len(reasons), 5)
+        self.assertGreaterEqual(len(verdicts), 6)
+        _, body = read("finishing-work")
+        for item in sorted(reasons) + ["uncited"]:
+            with self.subTest(reason=item):
+                self.assertIn(item, body)
+        for verdict in sorted(verdicts):
+            with self.subTest(verdict=verdict):
+                self.assertIn(f"`{verdict}`", body)
+
+    def test_no_pipeline_or_approval_query(self):
+        _, body = read("finishing-work")
+        for pattern in (r"\bCI\b", r"pipeline", r"worktree", r"\bAPI\b", r"\.specs"):
+            with self.subTest(pattern=pattern):
+                self.assertIsNone(re.search(pattern, body))
