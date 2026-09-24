@@ -14,6 +14,7 @@ COMMANDS = ROOT / "commands"
 EXPECTED = {
     "init": True,
     "start": True,
+    "clarify": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
