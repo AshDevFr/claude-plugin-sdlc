@@ -198,7 +198,7 @@ class CommandFileTest(OfflineTestCase):
         for needle in (
             "CODEOWNERS",
             "Dismiss stale pull request approvals",
-            "Remove all approvals when commits are added",
+            "Remove approvals by Code Owners if their files changed",
         ):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
