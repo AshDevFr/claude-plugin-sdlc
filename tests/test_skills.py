@@ -7,7 +7,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
 HELPER_TEMPLATES = ROOT / "tools" / "specs" / "sdlc_specs" / "templates"
-NAMES = ("workflow", "spec-template", "commit-conventions", "intent-writing")
+NAMES = ("workflow", "spec-template", "commit-conventions", "intent-writing", "intent-sync")
 PLATFORMS = ("GitLab", "GitHub", "Linear")
 SPEC_CHANGE_KINDS = ("initial", "clarify", "amend", "acknowledge", "supersede")
 
@@ -77,3 +77,28 @@ class ConventionsTest(unittest.TestCase):
         _, body = read("workflow")
         self.assertIn('"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs"', body)
         self.assertIn("exits 2", body)
+
+
+class IntentSyncTest(unittest.TestCase):
+    CASES = ("**A**", "**B**", "**C1**", "**C2**", "**D**", "**Spec wrong**", "**Scope found**")
+
+    def test_every_case_has_a_row_naming_its_path(self):
+        _, body = read("intent-sync")
+        rows = [line for line in body.splitlines() if line.startswith("| **")]
+        for case in self.CASES:
+            with self.subTest(case=case):
+                row = next((r for r in rows if r.startswith(f"| {case} |")), None)
+                self.assertIsNotNone(row, f"no table row for {case}")
+                self.assertRegex(row, r"/sdlc:(sync|start)|n/a")
+
+    def test_kinds_named_are_known(self):
+        _, body = read("intent-sync")
+        for kind in re.findall(r"`Spec-Change: ([a-z]+)`", body):
+            self.assertIn(kind, SPEC_CHANGE_KINDS)
+
+    def test_offline_and_advisory_only(self):
+        # The change lane needs nothing beyond git; nothing is sent anywhere.
+        _, body = read("intent-sync")
+        for word in (r"ticket", r"tracker", r"\bMCP\b", r"\bCI\b", r"nightly", r"\bpost(s|ed|ing)?\b"):
+            with self.subTest(word=word):
+                self.assertIsNone(re.search(word, body, flags=re.I))
