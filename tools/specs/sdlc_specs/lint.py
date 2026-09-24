@@ -17,8 +17,8 @@ from .config import Config
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
 from .keys import Keys
 from .output import Output
-from .snapshot import content_sha256, intent_sha256, parse_snapshot_file
-from .spec import AC_SECTION, REVISIONS_SECTION, SpecParseError, parse_spec_text
+from .snapshot import content_sha256, intent_sha256, normalise, parse_snapshot_file
+from .spec import AC_SECTION, REVISIONS_SECTION, SpecParseError, _sections, parse_spec_text
 
 SPEC_FILE = "spec.md"
 SNAPSHOT_FILE = "ticket.snapshot.md"
@@ -41,6 +41,7 @@ RULES = {
     "L014": "The spec names its intent: an intent block, a ticket, or both",
     "L015": "The intent file named by intent.file exists in the spec directory",
     "L016": "The intent file has not changed since the spec recorded its hash",
+    "L017": "With --ready: no section still holds the template's guidance text",
 }
 
 REQUIRED_SECTIONS = (
@@ -98,8 +99,36 @@ class LintOptions:
     base: str | None = None
 
 
+# Sections whose template text may rightly stay: no questions, no decisions yet, the r1 entry.
+_GUIDANCE_MAY_STAY = {"Open questions", "Decisions", REVISIONS_SECTION}
+
+
+def template_guidance(config: Config, root: Path) -> dict[str, str]:
+    """Section title -> the template's guidance for it, normalised, for the sections a spec
+    must replace before review. Read from the template in use, so a team's own counts."""
+    from .new import template_text  # a lazy import: new.py imports this module's neighbours
+
+    lines = template_text(config, root, SPEC_FILE).replace("\r\n", "\n").split("\n")
+    _, sections, _ = _sections(lines, 0)
+    guidance = {}
+    for title, section in sections.items():
+        text = normalise("\n".join(line for _, line, _ in section.lines))
+        if text and title not in _GUIDANCE_MAY_STAY:
+            guidance[title] = text
+    return guidance
+
+
 class _SpecLinter:
-    def __init__(self, spec_dir: Path, root: Path, config: Config, keys: Keys, options: LintOptions):
+    def __init__(
+        self,
+        spec_dir: Path,
+        root: Path,
+        config: Config,
+        keys: Keys,
+        options: LintOptions,
+        guidance: dict[str, str] | None = None,
+    ):
+        self.guidance = guidance or {}
         self.dir = spec_dir
         self.root = root
         self.config = config
@@ -133,6 +162,7 @@ class _SpecLinter:
         if self.options.ready:
             for question in spec.open_questions:
                 self.add("L008", question.line, f"open question left: {question.text}")
+            self.template_text()
         self.attachments(fm)
         self.snapshot(fm)
         self.superseded(fm)
@@ -330,6 +360,16 @@ class _SpecLinter:
                     self.line_of("intent.content_sha256"),
                     f"{name} changed since the spec recorded it: review the spec with /sdlc:sync",
                 )
+
+    # L017
+    def template_text(self) -> None:
+        for title, guidance in self.guidance.items():
+            section = self.spec.sections.get(title)
+            if section is None:
+                continue  # L005 reports a missing section
+            text = normalise("\n".join(line for _, line, _ in section.lines))
+            if text == guidance:
+                self.add("L017", section.start_line, f"'## {title}' still holds the template's guidance")
 
     # L004
     def system(self, fm: dict[str, Any]) -> None:
@@ -547,9 +587,10 @@ def lint(root: Path, config: Config, spec_dirs: list[Path], options: LintOptions
     if options.base:
         _verify_ref(root, options.base)
     keys = Keys(config, root)
+    guidance = template_guidance(config, root) if options.ready else {}
     findings: list[Finding] = []
     for spec_dir in spec_dirs:
-        findings += _SpecLinter(spec_dir.resolve(), root.resolve(), config, keys, options).run()
+        findings += _SpecLinter(spec_dir.resolve(), root.resolve(), config, keys, options, guidance).run()
     return sorted(findings, key=lambda f: (f.path, f.line if f.line is not None else 0, f.rule))
 
 

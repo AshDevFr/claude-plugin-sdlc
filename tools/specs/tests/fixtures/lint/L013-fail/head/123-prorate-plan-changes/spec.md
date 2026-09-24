@@ -39,7 +39,7 @@ AC-4: something
 - **AC-3** Proration uses the subscription's billing anchor, not the calendar month.
 
 ## Design
-Approach, data model changes, API changes, alternatives considered and why rejected.
+Proration uses the billing anchor and posts an invoice line; credits use the balance ledger.
 
 ## Risks and security
 Link `threat-model.md` when the change crosses a trust boundary.

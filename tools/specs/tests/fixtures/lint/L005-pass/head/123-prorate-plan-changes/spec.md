@@ -41,7 +41,7 @@ What exists today and why the ticket needs more than the ticket says.
 - **AC-3** Proration uses the subscription's billing anchor, not the calendar month.
 
 ## Notes
-Approach, data model changes, API changes, alternatives considered and why rejected.
+Proration uses the billing anchor and posts an invoice line; credits use the balance ledger.
 
 ## Risks and security
 Link `threat-model.md` when the change crosses a trust boundary.

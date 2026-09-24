@@ -271,11 +271,12 @@ class IntentSpecLintTest(LintRepoTestCase):
         return self.specs / f"{date}-webhook-retries"
 
     def rules(self, **kwargs):
-        return [f.rule for f in self.run_lint(**kwargs)]
+        # A spec fresh from `specs new` still holds template guidance; it isn't review-ready.
+        return [f.rule for f in self.run_lint(ready=False, **kwargs)]
 
     def test_a_new_intent_spec_is_clean(self):
         self.make()
-        self.assertEqual(self.run_lint(), [])
+        self.assertEqual(self.run_lint(ready=False), [])
 
     def test_date_id_must_be_a_real_date_matching_the_directory(self):
         spec_dir = self.make()
@@ -291,7 +292,7 @@ class IntentSpecLintTest(LintRepoTestCase):
             .read_text()
             .replace("id: 2026-09-24-webhook-retries", "id: 2026-13-40-webhook-retries")
         )
-        findings = self.run_lint()
+        findings = self.run_lint(ready=False)
         self.assertEqual([f.rule for f in findings], ["L003"])
         self.assertIn("date", findings[0].message)
 

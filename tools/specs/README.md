@@ -75,6 +75,21 @@ On any error:
 
 ## Commands
 
+### `check`
+
+```sh
+tools/specs/specs check [<spec-dir>...] [--all] [--ready]
+```
+
+The local check before committing: per spec, lint findings, criteria no test cites yet, and the
+intent state (`unchanged`, `changed`, `not recorded`, `n/a` for a ticket spec). Without a
+directory, the current branch's spec. Exits 1 when there is anything to report.
+
+With `--ready`, it also says whether each spec is ready for review, with reasons: open
+questions, template text left in a section, other lint findings, the intent changed or not
+recorded. Uncited criteria don't count against readiness: spec review comes before code. It
+exits 0 only when every spec is ready.
+
 ### `init`
 
 ```sh
@@ -126,6 +141,7 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 | `L014` | The spec names its intent: an `intent` block, a `ticket`, or both |
 | `L015` | The file named by `intent.file` exists in the spec directory |
 | `L016` | The intent file hasn't changed since the spec recorded its hash (otherwise: `/sdlc:sync`) |
+| `L017` | With `--ready`: no section still holds the template's guidance text (the team's template when it has one) |
 
 JSON output:
 

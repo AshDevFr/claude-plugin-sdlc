@@ -15,6 +15,7 @@ EXPECTED = {
     "init": True,
     "start": True,
     "clarify": True,
+    "check": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -57,6 +58,13 @@ class CommandFilesTest(unittest.TestCase):
     def test_no_unlisted_command(self):
         # A command file nobody listed here has no test.
         self.assertEqual(sorted(p.stem for p in COMMANDS.glob("*.md")), sorted(EXPECTED))
+
+
+class CheckCommandTest(unittest.TestCase):
+    def test_check_never_reads_a_failure_as_a_pass(self):
+        text = (COMMANDS / "check.md").read_text(encoding="utf-8")
+        self.assertIn("couldn't check", text)
+        self.assertIn("/sdlc:sync", text)
 
 
 class CheckerTest(unittest.TestCase):
