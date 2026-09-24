@@ -72,6 +72,8 @@ substantial ones, and those grow attachments (threat model, diagrams, API schema
 
 ```
 <repo>/
+├── intents/                                # optional: intents written ahead of their spec
+│   └── 2026-09-24-partner-dashboard.md     # /sdlc:intent; /sdlc:start keeps the id
 ├── specs/                                  # or .specs/
 │   ├── config.yml                          # see 2.1
 │   ├── templates/                          # the team's spec and intent templates
@@ -93,6 +95,11 @@ well in `git log`, and never changes, even if a ticket is linked later. Keep slu
 
 **Plans.** `plan.local.md` is ignored by git on purpose. If a change deserves a committed plan
 (a multi-PR migration, say), rename it `plan.md` and commit it deliberately.
+
+**Intents ahead of specs.** `/sdlc:intent` writes an intent before anyone starts its spec: in
+`intents/<id>.md` when the repository has an `intents/` directory (so pending intents can be
+reviewed on their own), otherwise in `specs/<id>/intent.md`, a spec directory holding only the
+intent until `/sdlc:start` writes the spec beside it. The spec keeps the intent's id.
 
 **Handoffs.** `/sdlc:handoff` writes `handoff.local.md` when you pause: in-flight work,
 decisions not yet written down, dead ends, the next step. It stays out of git; the next session
@@ -236,6 +243,7 @@ and `/sdlc:sync` shows the change (section 5.1).
 
 ```mermaid
 flowchart TD
+    P["/sdlc:intent<br/>whoever has the problem<br/>writes the intent with Claude"] -.-> A
     A["A request: intent.md,<br/>a file, or pasted text"] --> B["/sdlc:start<br/>assess the intent, offer help,<br/>create the spec, draft it"]
     B --> C["/sdlc:clarify<br/>open questions to decisions"]
     C --> D["/sdlc:propose<br/>readiness check,<br/>text for a spec-only draft PR"]
@@ -252,6 +260,8 @@ flowchart TD
 
 1. **Decide the change deserves a spec.** Substantial changes do; small fixes go straight to a
    normal PR.
+   Whoever has the problem can write the intent first with **`/sdlc:intent`**: an interview in
+   their words that fills the template and writes one file, under the id the spec will keep.
 2. **`/sdlc:start`** with an `intent.md`, a file, or the request pasted in. It assesses the
    intent and offers help, offers a branch named after the spec when you're on the default
    branch, creates `specs/<id>/` through the helper, and drafts `spec.md` with you, grounded in
@@ -485,6 +495,7 @@ repository; it doesn't call the tracker or the code host, and it touches no CI.
 | Command | Based on (`sdd`) | What it does |
 |---|---|---|
 | `/sdlc:init` | `bootstrap` | Once per repository: writes `specs/config.yml`, the templates, a `.gitignore` entry and a `## Specs` section in `CLAUDE.md`; prints the `CODEOWNERS` entry and host settings to apply |
+| `/sdlc:intent` | new | Writes the intent with whoever has the problem, before any spec: an interview, one file |
 | `/sdlc:start` | `brainstorm`, `generate-specs` | Assesses the intent and offers help, creates the spec directory, drafts the spec. `--supersedes <id>` for follow-ups |
 | `/sdlc:clarify` | `clarify` | Works open questions down to decisions, folded into `## Decisions` with their source |
 | `/sdlc:analyze` | `analyze` | Read-only check of one spec against itself and its intent |

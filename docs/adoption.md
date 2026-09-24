@@ -43,7 +43,9 @@ commands follow.
 
 ## Your first change
 
-Pick something real but modest, with a request someone else wrote.
+Pick something real but modest, with a request someone else wrote. If it isn't written down
+yet, whoever has the problem can write it with **`/sdlc:intent`** first: an interview in their
+words that produces the intent file, under the id the spec will keep.
 
 1. **`/sdlc:start`** with the request: an `intent.md`, a file, or the text pasted in. It points
    out the gaps in the request and offers to fill them with you (or to go ahead as it is), then

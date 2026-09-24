@@ -46,6 +46,7 @@ specs/
 | Situation | Command |
 |---|---|
 | Setting a repository up | `/sdlc:init` |
+| Writing a request down before anyone starts a spec | `/sdlc:intent` |
 | A new request to turn into a spec | `/sdlc:start` |
 | The spec has open questions | `/sdlc:clarify` |
 | Checking a spec against itself and its intent | `/sdlc:analyze` |

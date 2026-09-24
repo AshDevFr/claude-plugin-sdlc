@@ -7,6 +7,7 @@ DOC = ROOT / "docs" / "workflow.md"
 
 MVP_COMMANDS = {
     "/sdlc:init",
+    "/sdlc:intent",
     "/sdlc:start",
     "/sdlc:clarify",
     "/sdlc:analyze",

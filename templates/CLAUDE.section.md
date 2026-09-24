@@ -9,7 +9,7 @@ spec gets a directory under `$specs_dir/`:
 - `spec.md` is the contract: what the team reviews in the pull request, what the code is built
   against, and what tests cite as `<spec-id>:AC-<n>`.
 
-Start a change with `/sdlc:start`. Run `/sdlc:check` before committing spec changes. When
+Write a request down with `/sdlc:intent`; start a change with `/sdlc:start`. Run `/sdlc:check` before committing spec changes. When
 `intent.md` changes after the spec was written, or the spec turns out to be wrong, run
 `/sdlc:sync`.
 
