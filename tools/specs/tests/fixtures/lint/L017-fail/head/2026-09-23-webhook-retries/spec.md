@@ -1,6 +1,11 @@
 ---
 id: 2026-09-23-webhook-retries
 title: Webhook retries
+intent:
+  file: intent.md
+  content_sha256: 17cb36c866de7fccf4a5aa1281496bb2a9b4ed4348094c66f0237833aadafb07
+  recorded_at: 2026-09-23T11:02:00Z
+  recorded_by: jdoe
 revision: 1
 state: active
 supersedes: []
@@ -22,7 +27,7 @@ Deliveries are sent once and dropped on any error.
 - **AC-1** Given a 503, when delivering, then it is retried.
 
 ## Design
-Failed deliveries go to a retry queue per partner, using the existing backoff.
+Approach, data model changes, API changes, alternatives considered and why rejected.
 
 ## Risks and security
 Retries make delivery at-least-once; partners dedupe on the event id.

@@ -17,20 +17,20 @@ superseded_by: null
 > Intent: [intent.md](intent.md). The spec is the contract; the intent is the original request.
 
 ## Context
-What exists today, and what the request leaves out that the implementation needs.
+Deliveries are sent once and dropped on any error.
 
 ## Goals
 
 ## Non-goals
 
 ## Acceptance criteria
-- **AC-1** Describe the first observable outcome. Number new criteria upward; never renumber one, and strike a dropped one through with the reason after it.
+- **AC-1** Given a 503, when delivering, then it is retried.
 
 ## Design
-Approach, data model changes, API changes, alternatives considered and why rejected.
+Failed deliveries go to a retry queue per partner, using the existing backoff.
 
 ## Risks and security
-Link a threat model kept in this directory when the change crosses a trust boundary.
+Retries make delivery at-least-once; partners dedupe on the event id.
 
 ## Rollout and migration
 

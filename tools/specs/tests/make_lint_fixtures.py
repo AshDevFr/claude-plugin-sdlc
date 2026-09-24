@@ -198,6 +198,16 @@ fixture(
     needle="AC-4: something",
 )
 
+
+def fill_sections(spec: str, bodies: dict[str, str]) -> str:
+    """Replace each section's body (everything up to the next heading) with the given text."""
+    for heading, body in bodies.items():
+        start = spec.index(heading) + len(heading)
+        end = spec.index("\n## ", start) + 1
+        spec = spec[:start] + body + "\n" + spec[end:]
+    return spec
+
+
 # Intent specs: the base is what `specs new` writes, with fixed dates and author.
 INTENT_NAME = "2026-09-23-webhook-retries"
 INTENT_TEXT = render_body((TEMPLATES / "intent.md").read_text(), "Webhook retries", "", "2026-09-23", "jdoe")
@@ -212,6 +222,19 @@ INTENT_SPEC = render_frontmatter(
     },
 ) + render_body(
     (TEMPLATES / "spec.md").read_text(), "Webhook retries", "[intent.md](intent.md)", "2026-09-23", "jdoe"
+)
+
+
+# A spec going to review replaces the template's guidance with real content (rule L017).
+DESIGN_GUIDANCE = "Approach, data model changes, API changes, alternatives considered and why rejected.\n"
+INTENT_SPEC = fill_sections(
+    INTENT_SPEC,
+    {
+        "## Context\n": "Deliveries are sent once and dropped on any error.\n",
+        "## Acceptance criteria\n": "- **AC-1** Given a 503, when delivering, then it is retried.\n",
+        "## Design\n": "Failed deliveries go to a retry queue per partner, using the existing backoff.\n",
+        "## Risks and security\n": "Retries make delivery at-least-once; partners dedupe on the event id.\n",
+    },
 )
 
 
@@ -244,5 +267,10 @@ intent_fixture("L016-pass", INTENT_SPEC)
 edited_intent = INTENT_TEXT.replace("## Constraints\n", "## Constraints\nNo new PII.\n")
 assert edited_intent != INTENT_TEXT
 intent_fixture("L016-fail", INTENT_SPEC, intent=edited_intent, rule="L016", needle="content_sha256:")
+
+# L017: with --ready, a section still holding the template's guidance
+intent_fixture("L017-pass", INTENT_SPEC)
+guidance_left = fill_sections(INTENT_SPEC, {"## Design\n": DESIGN_GUIDANCE})
+intent_fixture("L017-fail", guidance_left, rule="L017", needle="## Design")
 
 print("\n".join(sorted(p.name for p in OUT.iterdir())))
