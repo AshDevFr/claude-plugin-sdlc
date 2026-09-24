@@ -112,6 +112,23 @@ JSON output:
 
 `line` is `null` when a finding has no line (a missing `spec.md`).
 
+### `new`
+
+```sh
+tools/specs/specs new --key <ticket> --title <title> [--slug <slug>] [--supersedes <id>]
+```
+
+Creates `<specs_dir>/<ticket-prefix>-<slug>/spec.md` from the template, with `revision: 1`,
+`state: active` and a placeholder `AC-1`. The ticket snapshot is not taken yet, so `lint` reports
+only `L010` until it is. Exits 1 without writing anything when the ticket already has a spec
+directory.
+
+With `--supersedes <id>`, the new spec lists `<id>` under `supersedes`, and the old spec gets
+`state: superseded` and `superseded_by: <new id>`, edited in place so the rest of the file is
+unchanged. A missing or already superseded spec exits 1 without writing anything.
+
+JSON output: `{"ok": true, "path": "specs/eng-123-webhook-retries", "id": "eng-123-webhook-retries"}`.
+
 ## Development
 
 From the repository root:

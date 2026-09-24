@@ -1,0 +1,227 @@
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from sdlc_specs.frontmatter import set_top_level
+from sdlc_specs.spec import parse_spec
+
+from tests.base import OfflineTestCase
+
+EXAMPLE = Path(__file__).resolve().parent / "fixtures" / "specs" / "123-prorate-plan-changes"
+
+LINEAR_CONFIG = """tracker:
+  system: linear
+  team_key: ENG
+code_host:
+  system: github
+  spec_approvers: "@acme/spec-approvers"
+"""
+GITHUB_CONFIG = """tracker:
+  system: github
+code_host:
+  system: github
+  spec_approvers: "@acme/spec-approvers"
+"""
+GIT_ENV = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+
+def tree_digest(path: Path) -> dict[str, str]:
+    return {
+        p.relative_to(path).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(path.rglob("*"))
+        if p.is_file()
+    }
+
+
+class NewRepoTestCase(OfflineTestCase):
+    def setUp(self):
+        super().setUp()
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, env={**os.environ, **GIT_ENV})
+        subprocess.run(["git", "-C", str(self.root), "config", "user.name", "jdoe"], check=True)
+        self.specs = self.root / "specs"
+        self.specs.mkdir()
+
+    def config(self, text: str) -> None:
+        (self.specs / "config.yml").write_text(text)
+
+    def specs_cmd(self, *args: str):
+        return self.run_shim(*args, cwd=self.root, env=GIT_ENV)
+
+    def add_old_spec(self) -> Path:
+        """A lint-clean spec for #88 under a GitHub tracker, built from the workflow example."""
+        old = self.specs / "88-plan-change-billing"
+        shutil.copytree(EXAMPLE, old)
+        spec = old / "spec.md"
+        text = spec.read_text()
+        text = text.replace("id: 123-prorate-plan-changes", "id: 88-plan-change-billing")
+        text = text.replace("system: gitlab ", "system: github ")
+        text = text.replace("ref: billing/api#123 ", 'ref: "#88"          ')
+        spec.write_text(text)
+        snapshot = old / "ticket.snapshot.md"
+        snapshot.write_text(snapshot.read_text().replace("ticket: billing/api#123 ", "ticket: #88 "))
+        return old
+
+
+class NewTest(NewRepoTestCase):
+    def test_new_spec_lints_except_for_the_missing_snapshot(self):
+        self.config(LINEAR_CONFIG)
+        result = self.specs_cmd("new", "--key", "ENG-123", "--title", "Webhook retries")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spec_dir = self.specs / "eng-123-webhook-retries"
+        self.assertTrue((spec_dir / "spec.md").is_file())
+        self.assertIn("specs/eng-123-webhook-retries", result.stdout)
+
+        lint = self.specs_cmd("--json", "lint", str(spec_dir))
+        self.assertEqual(lint.returncode, 1, lint.stdout + lint.stderr)
+        findings = json.loads(lint.stdout)["findings"]
+        self.assertEqual(
+            [(f["rule"], f["message"].split(":")[0]) for f in findings], [("L010", "no snapshot yet")]
+        )
+
+    def test_frontmatter_and_body(self):
+        self.config(GITHUB_CONFIG)
+        result = self.specs_cmd("new", "--key", "#131", "--title", "Plan change: v2 #fast")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spec = parse_spec(self.specs / "131-plan-change-v2-fast" / "spec.md")
+        fm = spec.frontmatter
+        self.assertEqual(fm["id"], "131-plan-change-v2-fast")
+        self.assertEqual(fm["title"], "Plan change: v2 #fast")
+        self.assertEqual(fm["ticket"], {"system": "github", "ref": "#131", "url": ""})
+        self.assertEqual(
+            (fm["revision"], fm["state"], fm["supersedes"], fm["superseded_by"]), (1, "active", [], None)
+        )
+        self.assertEqual(spec.title, "Plan change: v2 #fast")
+        self.assertEqual([c.number for c in spec.criteria], [1])
+        self.assertEqual([(r.number, r.author) for r in spec.revisions], [(1, "jdoe")])
+        self.assertEqual(spec.open_questions, [])
+
+    def test_slug_override(self):
+        self.config(GITHUB_CONFIG)
+        result = self.specs_cmd("new", "--key", "7", "--title", "Something long", "--slug", "Short Name")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.specs / "7-short-name" / "spec.md").is_file())
+
+    def test_json_output(self):
+        self.config(GITHUB_CONFIG)
+        result = self.specs_cmd("--json", "new", "--key", "7", "--title", "Seven")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"ok": True, "path": "specs/7-seven", "id": "7-seven"})
+
+    def test_running_twice_changes_nothing(self):
+        self.config(LINEAR_CONFIG)
+        self.assertEqual(
+            self.specs_cmd("new", "--key", "ENG-123", "--title", "Webhook retries").returncode, 0
+        )
+        before = tree_digest(self.specs)
+        again = self.specs_cmd("new", "--key", "eng-123", "--title", "Another title")
+        self.assertEqual(again.returncode, 1)
+        self.assertIn("specs/eng-123-webhook-retries", again.stderr)
+        self.assertEqual(tree_digest(self.specs), before)
+
+    def test_bad_key_is_a_usage_error(self):
+        self.config(LINEAR_CONFIG)
+        result = self.specs_cmd("new", "--key", "123", "--title", "x")
+        self.assertEqual(result.returncode, 2)
+
+
+class SupersedesTest(NewRepoTestCase):
+    def test_supersedes_updates_both_specs(self):
+        self.config(GITHUB_CONFIG)
+        old = self.add_old_spec()
+        self.assertEqual(self.specs_cmd("lint", str(old)).returncode, 0, "the old spec must start clean")
+        before = (old / "spec.md").read_text().splitlines()
+
+        result = self.specs_cmd(
+            "new", "--key", "131", "--title", "Plan change v2", "--supersedes", "88-plan-change-billing"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        new = parse_spec(self.specs / "131-plan-change-v2" / "spec.md")
+        self.assertEqual(new.frontmatter["supersedes"], ["88-plan-change-billing"])
+        old_spec = parse_spec(old / "spec.md")
+        self.assertEqual(old_spec.frontmatter["state"], "superseded")
+        self.assertEqual(old_spec.frontmatter["superseded_by"], "131-plan-change-v2")
+
+        after = (old / "spec.md").read_text().splitlines()
+        self.assertEqual(len(before), len(after))
+        changed = [(b, a) for b, a in zip(before, after, strict=True) if b != a]
+        self.assertEqual(
+            changed,
+            [
+                (
+                    "state: active                        # active | superseded",
+                    "state: superseded                        # active | superseded",
+                ),
+                (
+                    "superseded_by: null                  # set by the PR that supersedes this spec",
+                    "superseded_by: 131-plan-change-v2                  "
+                    "# set by the PR that supersedes this spec",
+                ),
+            ],
+        )
+        lint = self.specs_cmd("lint", str(old))
+        self.assertEqual(lint.returncode, 0, lint.stdout + lint.stderr)
+
+    def test_missing_superseded_spec_writes_nothing(self):
+        self.config(GITHUB_CONFIG)
+        before = tree_digest(self.specs)
+        result = self.specs_cmd(
+            "new", "--key", "131", "--title", "Plan change v2", "--supersedes", "999-missing"
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("999-missing", result.stderr)
+        self.assertEqual(tree_digest(self.specs), before)
+
+    def test_already_superseded_spec_is_refused(self):
+        self.config(GITHUB_CONFIG)
+        old = self.add_old_spec()
+        spec = old / "spec.md"
+        spec.write_text(
+            spec.read_text()
+            .replace("state: active ", "state: superseded ")
+            .replace("superseded_by: null ", "superseded_by: 100-x ")
+        )
+        before = tree_digest(self.specs)
+        result = self.specs_cmd(
+            "new", "--key", "131", "--title", "v2", "--supersedes", "88-plan-change-billing"
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("100-x", result.stderr)
+        self.assertEqual(tree_digest(self.specs), before)
+
+
+class SetTopLevelTest(OfflineTestCase):
+    def test_replaces_value_and_keeps_the_comment_gap(self):
+        text = "---\nid: x\nstate: active   # note\nrevision: 1\n---\nbody\n"
+        self.assertEqual(
+            set_top_level(text, "state", "superseded"),
+            "---\nid: x\nstate: superseded   # note\nrevision: 1\n---\nbody\n",
+        )
+
+    def test_replaces_a_block_value(self):
+        text = "---\nsupersedes:\n  - a\n  - b\nstate: active\n---\n"
+        self.assertEqual(
+            set_top_level(text, "supersedes", "[c]"), "---\nsupersedes: [c]\nstate: active\n---\n"
+        )
+
+    def test_inserts_a_missing_key_before_the_closing_marker(self):
+        text = "---\nid: x\n---\nbody\n"
+        self.assertEqual(
+            set_top_level(text, "superseded_by", "y"), "---\nid: x\nsuperseded_by: y\n---\nbody\n"
+        )
+
+    def test_nested_keys_are_not_matched(self):
+        text = "---\nticket:\n  state: nested\nstate: top\n---\n"
+        self.assertEqual(
+            set_top_level(text, "state", "changed"), "---\nticket:\n  state: nested\nstate: changed\n---\n"
+        )
+
+    def test_crlf_is_kept(self):
+        text = "---\r\nstate: active\r\n---\r\n"
+        self.assertEqual(set_top_level(text, "state", "superseded"), "---\r\nstate: superseded\r\n---\r\n")
