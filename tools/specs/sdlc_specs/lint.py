@@ -532,8 +532,15 @@ def select_spec_dirs(root: Path, config: Config, paths: list[str], changed_since
     return sorted(selected)
 
 
+# `<specs_dir>/templates/` holds the team's spec and intent templates, not a spec. No spec id can
+# be "templates": ids are dates or ticket keys.
+TEMPLATES_DIR = "templates"
+
+
 def _all_spec_dirs(specs: Path) -> set[Path]:
-    return {p for p in specs.iterdir() if p.is_dir()} if specs.is_dir() else set()
+    if not specs.is_dir():
+        return set()
+    return {p for p in specs.iterdir() if p.is_dir() and p.name != TEMPLATES_DIR}
 
 
 def lint(root: Path, config: Config, spec_dirs: list[Path], options: LintOptions) -> list[Finding]:

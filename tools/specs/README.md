@@ -75,6 +75,24 @@ On any error:
 
 ## Commands
 
+### `init`
+
+```sh
+tools/specs/specs init --tracker <gitlab|github|linear> --host <gitlab|github> [--project P] [--team-key K] [--approvers A] [--specs-dir specs|.specs] [--dry-run]
+tools/specs/specs init --upgrade [--dry-run]
+```
+
+The file writes behind `/sdlc:init`; the only command that runs without a config. It writes
+`<specs_dir>/config.yml`, a `.gitignore` entry and a `CLAUDE.md` section (between marker
+comments), and copies the spec and intent templates to `<specs_dir>/templates/`. Each item is
+reported as `written`, `appended`, `present`, `updated` or `customised`; a second run changes
+nothing. An existing config with other settings stops the run (exit 1) before anything is
+written.
+
+`--upgrade` refreshes the `CLAUDE.md` section and replaces a repo template only when it is a
+version the plugin shipped unchanged (`sdlc_specs/templates/HISTORY`); an edited template is
+reported `customised`, with its diff, and left alone. It never writes `CODEOWNERS`.
+
 ### `lint`
 
 ```sh
