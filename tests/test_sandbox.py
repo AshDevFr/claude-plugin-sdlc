@@ -21,6 +21,7 @@ NAMES = (
     "intent-changed-impact",
     "merged-spec-intent-change",
     "converge-partial",
+    "implement-contradiction",
 )
 ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 

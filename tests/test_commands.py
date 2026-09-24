@@ -24,6 +24,7 @@ EXPECTED = {
     "converge": True,
     "handoff": True,
     "plan": True,
+    "implement": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -166,6 +167,20 @@ class PlanCommandTest(unittest.TestCase):
         self.assertIn("git check-ignore", text)
         self.assertIn("--commit", text)
         self.assertIn("skills/spec-template/plan.md", text)
+
+
+class ImplementCommandTest(unittest.TestCase):
+    def setUp(self):
+        self.text = (COMMANDS / "implement.md").read_text(encoding="utf-8")
+
+    def test_commits_only_after_showing_the_message_and_a_yes(self):
+        self.assertIn("/sdlc:commit-msg", self.text)
+        self.assertIn("only on a yes", self.text)
+
+    def test_a_wrong_spec_stops_the_work(self):
+        section = self.text[self.text.index("## When the spec is wrong") :]
+        self.assertIn("/sdlc:sync", section)
+        self.assertIn("no further commit", section)
 
 
 class CheckerTest(unittest.TestCase):
