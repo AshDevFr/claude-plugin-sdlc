@@ -22,6 +22,7 @@ EXPECTED = {
     "propose": True,
     "sync": True,
     "converge": True,
+    "handoff": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -147,6 +148,14 @@ class ConvergeCommandTest(unittest.TestCase):
                 self.assertIn(f"`{verdict}`", text)
         self.assertIn("read-only", text)
         self.assertIn('specs" --json coverage', text)
+
+
+class HandoffCommandTest(unittest.TestCase):
+    def test_pauses_to_an_ignored_file_and_resumes(self):
+        text = (COMMANDS / "handoff.md").read_text(encoding="utf-8")
+        self.assertIn("handoff.local.md", text)
+        self.assertIn("## Resume", text)
+        self.assertIn("@{upstream}..HEAD", text)
 
 
 class CheckerTest(unittest.TestCase):

@@ -154,3 +154,27 @@ class IntentDefaultTest(StatusTestCase):
         result = self.specs("intent", "check")
         self.assertEqual(result.returncode, 2)
         self.assertIn("SPEC_DIR", result.stderr)
+
+
+class HandoffTest(StatusTestCase):
+    def test_a_waiting_handoff_is_mentioned(self):
+        spec_id = self.new("webhook-retries")
+        self.git("switch", "-q", "-c", spec_id)
+        (self.root / "specs" / spec_id / "handoff.local.md").write_text("# Handoff\n")
+        result = self.specs("status")
+        self.assertEqual(
+            result.stdout.strip(), f"{spec_id} r1: 0 lint finding(s), intent unchanged, handoff waiting"
+        )
+        self.assertIs(self.status()["handoff"], True)
+
+    def test_no_handoff_no_mention(self):
+        spec_id = self.new("webhook-retries")
+        self.git("switch", "-q", "-c", spec_id)
+        self.assertNotIn("handoff", self.specs("status").stdout)
+        self.assertIs(self.status()["handoff"], False)
+
+    def test_a_handoff_on_a_branch_without_a_spec(self):
+        self.git("switch", "-q", "-c", "fix-typo")
+        (self.root / "specs" / "handoff.local.md").write_text("# Handoff\n")
+        self.assertEqual(self.specs("status").stdout.strip(), "no spec for this branch, handoff waiting")
+        self.assertIs(self.status()["handoff"], True)

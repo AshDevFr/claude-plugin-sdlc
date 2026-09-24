@@ -233,6 +233,8 @@ One line for the current branch's spec: `<id> r<revision>: <n> lint finding(s), 
 (`n/a` for a ticket spec), or `no spec for this branch`, or `no branch` on a detached HEAD.
 The spec is the one whose id appears in the branch name (the longest when several do), else
 the spec of the ticket the branch names. Always exits 0; fast enough for a status line.
+`, handoff waiting` is appended when `/sdlc:handoff` left a `handoff.local.md` in the spec's
+directory (in `<specs_dir>/` for a branch without a spec).
 
 ### `trailers`
 
