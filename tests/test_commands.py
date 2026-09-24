@@ -26,6 +26,7 @@ EXPECTED = {
     "plan": True,
     "implement": True,
     "bug": True,
+    "intent": True,
 }
 # Commands advise and print; none of them changes git state for the engineer.
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|add)\b")
@@ -199,6 +200,26 @@ class BugCommandTest(unittest.TestCase):
         self.assertLess(self.text.index("# Stage: assess"), self.text.index("# Stage: fix"))
         self.assertIn("edits no source", self.text)
         self.assertIn("bugs/<slug>.local.md", self.text)
+
+
+class IntentCommandTest(unittest.TestCase):
+    def setUp(self):
+        self.text = (COMMANDS / "intent.md").read_text(encoding="utf-8")
+        # Phrases may wrap across lines or start a sentence.
+        self.prose = " ".join(self.text.split()).lower()
+
+    def test_an_interview_one_question_at_a_time(self):
+        self.assertIn("one question per turn", self.prose)
+        self.assertIn("in their words", self.prose)
+
+    def test_the_three_places_an_intent_goes(self):
+        self.assertIn("specs/config.yml", self.text)
+        self.assertIn('specs" --json intent new', self.text)
+        self.assertIn("intents/", self.text)
+
+    def test_writes_one_file_and_stops(self):
+        self.assertIn("no spec, no branch, no commit", self.prose.replace("*", ""))
+        self.assertIn("/sdlc:start", self.text)
 
 
 class CheckerTest(unittest.TestCase):

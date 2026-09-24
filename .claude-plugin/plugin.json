@@ -1,6 +1,6 @@
 {
   "name": "sdlc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Spec-driven development for teams: capture a request as an intent, turn it into a reviewed spec with numbered acceptance criteria, then plan and implement against it. Advice, not enforcement: no CI integration, no platform access.",
   "author": {
     "name": "Sylvain Cau",

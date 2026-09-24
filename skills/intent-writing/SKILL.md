@@ -28,6 +28,12 @@ the plugin's own at `${CLAUDE_PLUGIN_ROOT}/tools/specs/sdlc_specs/templates/inte
 - **Constraints**: limits the solution must respect: security, data, compatibility, dates.
 - **Open questions**: what is still unknown, and who can answer it.
 
+## Writing one before the spec
+
+`/sdlc:intent` is the way to write an intent with whoever has the problem, before any spec
+exists: an interview in their words, one question at a time, that fills the template and
+writes one file. `/sdlc:start` then picks the file up and keeps its id.
+
 ## Assessing an intent
 
 Start with the facts the helper can establish:

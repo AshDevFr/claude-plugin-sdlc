@@ -72,3 +72,25 @@ def implemented(repo: Repo) -> None:
     """Code and tests meeting AC-1 and AC-2, not committed."""
     repo.write("webhooks.py", repo.read("webhooks.py") + DELIVER)
     repo.write("tests/test_deliver.py", DELIVER_TEST)
+
+
+# What an intent's author says when interviewed, for the /sdlc:intent scenarios.
+AUTHOR_ANSWERS = (
+    "You are interviewing Priya Shah (partner success), the intent's author. Her answers: "
+    "Problem: partners lose webhook events whenever their endpoint is briefly down, because we "
+    "send each event once and drop it on any error; partner success handles about ten tickets a "
+    "week asking us to resend events by hand. Outcome: failed deliveries are retried "
+    "automatically long enough to ride out a short outage, and partners can see which "
+    "deliveries failed for good. Affected: partners receiving webhooks, the partner success "
+    "team, the webhook sender. Constraints: no change to the payload format; deliveries stay in "
+    "order per partner. Open question: how long to keep retrying, which the integrations lead "
+    "should answer. The title: Webhook retries. Confirm writing the file: yes."
+)
+
+
+def intent_sections_filled(repo: Repo, path: str) -> list[str]:
+    """The intent template sections that are missing, empty or still template text."""
+    import json
+
+    doc = json.loads(repo.specs("--json", "intent", "assess", "--file", path).stdout)
+    return [s["section"] for s in doc["sections"] if s["state"] != "ok"]
