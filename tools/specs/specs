@@ -1,12 +1,46 @@
 #!/usr/bin/env python3
-"""Entry point: tools/specs/specs <subcommand>. Needs nothing installed but PyYAML."""
+"""Entry point: tools/specs/specs <subcommand>. Needs Python 3.10+ and PyYAML, nothing else.
+
+This file checks both before importing anything that needs them, so a missing requirement is
+one clear line instead of a traceback. It must stay parseable by old interpreters for that check
+to run at all: no f-strings or newer syntax here.
+"""
 
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+REQUIRED = (3, 10)
+EXIT_USAGE = 2
 
-from sdlc_specs.cli import main  # noqa: E402
+
+def preflight(version_info=sys.version_info):
+    """The problem with this environment, or None."""
+    if tuple(version_info[:2]) < REQUIRED:
+        return "specs: needs Python %d.%d or newer, found %d.%d.%d" % (REQUIRED + tuple(version_info[:3]))
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        return "specs: PyYAML is not installed (pip install pyyaml)"
+    return None
+
+
+def _refuse(problem):
+    sys.stderr.write(problem + "\n")
+    if "--json" in sys.argv[1:]:
+        import json
+
+        doc = {"ok": False, "error": {"code": EXIT_USAGE, "message": problem}}
+        sys.stdout.write(json.dumps(doc) + "\n")
+    sys.exit(EXIT_USAGE)
+
 
 if __name__ == "__main__":
+    problem = preflight()
+    if problem:
+        _refuse(problem)
+
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from sdlc_specs.cli import main
+
     sys.exit(main())
