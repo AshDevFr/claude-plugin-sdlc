@@ -42,6 +42,7 @@ Requirements: Python 3.10+ and PyYAML on the machine running Claude Code.
 | `.claude-plugin/` | Plugin manifest and marketplace |
 | `tools/specs/` | The helper: parsing, lint, hashing, `new`, `intent`, `coverage`, `status` (see its README) |
 | `docs/workflow.md` | The workflow, as guidance and best practices |
+| `bin/sdlc-sandbox`, `sandbox/` | Disposable repositories in scripted states, for trying the commands |
 
 ## Development
 
@@ -49,4 +50,11 @@ Requirements: Python 3.10+ and PyYAML on the machine running Claude Code.
 make venv   # .venv with PyYAML and ruff
 make test   # the helper's tests and the plugin's tests
 make lint
+```
+
+To try the commands on something disposable, build a sandbox repository in one of the scripted
+states described under `sandbox/scenarios/`:
+
+```sh
+bin/sdlc-sandbox /tmp/sb --scenario weak-intent   # pushes go to /tmp/sb.origin.git
 ```
