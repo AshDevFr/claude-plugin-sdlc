@@ -6,7 +6,7 @@ ticket:
   ref: billing/api#123               # or org/repo#123, or ENG-123
   url: https://gitlab.example.com/billing/api/-/issues/123
   snapshot:
-    content_sha256: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef # sha256 of normalised title + description
+    content_sha256: 5cee61d26ee90c1b7d0fb397ba26f6857b0c91b1c4e275b1a0a89d304ff477d3 # sha256 of normalised title + description
     updated_at: 2026-09-23T10:14:00Z # informational only, see 5.1
     taken_by: jdoe
     taken_at: 2026-09-23T11:02:00Z
