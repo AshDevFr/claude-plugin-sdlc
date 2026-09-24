@@ -2,8 +2,9 @@
 [tool.ruff]
 line-length = 110
 target-version = "py310"
-# docs/ holds prose whose code blocks are illustrations, not code to format.
-extend-exclude = ["docs"]
+# ruff also formats code blocks in Markdown. docs/ holds prose whose code blocks are
+# illustrations, and test fixtures are byte-exact inputs, so neither may be rewritten.
+extend-exclude = ["docs", "tools/specs/tests/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
