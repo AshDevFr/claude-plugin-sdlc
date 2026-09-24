@@ -10,6 +10,8 @@
 - Helper: `specs intent new`; a spec directory holding only `intent.md` is a valid "intent, no
   spec yet" state for `lint`, `check`, `coverage` and `status`; `specs new` writes the spec
   beside it.
+- The `CLAUDE.md` section `/sdlc:init` writes now mentions `/sdlc:intent`; in a repository set
+  up with 0.1.0, `/sdlc:init` with `--upgrade` refreshes it.
 - Fixed: a date-named branch could be read as a ticket number and point `status` at the wrong
   directory.
 - Commands, all: `/sdlc:init`, `/sdlc:intent`, `/sdlc:start`, `/sdlc:clarify`, `/sdlc:analyze`,
