@@ -260,3 +260,42 @@ class CliTest(LintRepoTestCase):
         result = self.run_shim("lint", "--changed-since", "HEAD", cwd=self.root, env=GIT_ENV)
         self.assertEqual(result.returncode, 1)
         self.assertIn("L006", result.stdout)
+
+
+class IntentSpecLintTest(LintRepoTestCase):
+    """Specs whose intent is a local intent.md and whose id is a creation date."""
+
+    def make(self, date="2026-09-23", title="Webhook retries"):
+        result = self.run_shim("new", "--date", date, "--title", title, cwd=self.root, env=GIT_ENV)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return self.specs / f"{date}-webhook-retries"
+
+    def rules(self, **kwargs):
+        return [f.rule for f in self.run_lint(**kwargs)]
+
+    def test_a_new_intent_spec_is_clean(self):
+        self.make()
+        self.assertEqual(self.run_lint(), [])
+
+    def test_date_id_must_be_a_real_date_matching_the_directory(self):
+        spec_dir = self.make()
+        spec = spec_dir / "spec.md"
+        spec.write_text(
+            spec.read_text().replace("id: 2026-09-23-webhook-retries", "id: 2026-09-24-webhook-retries")
+        )
+        self.assertEqual(self.rules(), ["L003"])
+        bad = self.specs / "2026-13-40-webhook-retries"
+        spec_dir.rename(bad)
+        (bad / "spec.md").write_text(
+            (bad / "spec.md")
+            .read_text()
+            .replace("id: 2026-09-24-webhook-retries", "id: 2026-13-40-webhook-retries")
+        )
+        findings = self.run_lint()
+        self.assertEqual([f.rule for f in findings], ["L003"])
+        self.assertIn("date", findings[0].message)
+
+    def test_ticket_rules_do_not_apply_without_a_ticket(self):
+        self.make()
+        self.assertNotIn("L010", self.rules())
+        self.assertNotIn("L004", self.rules())

@@ -1,6 +1,15 @@
-# $title
+---
+id: 2026-09-23-webhook-retries
+title: Webhook retries
+revision: 1
+state: active
+supersedes: []
+superseded_by: null
+---
 
-> Intent: $intent. The spec is the contract; the intent is the original request.
+# Webhook retries
+
+> Intent: [intent.md](intent.md). The spec is the contract; the intent is the original request.
 
 ## Context
 What exists today, and what the request leaves out that the implementation needs.
@@ -26,4 +35,4 @@ Each one names who must answer it. The spec is not approvable with open question
 ## Decisions
 
 ## Revisions
-- **r1** ($date, $author): Initial spec.
+- **r1** (2026-09-23, jdoe): Initial spec.

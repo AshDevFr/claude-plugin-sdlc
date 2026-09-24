@@ -26,17 +26,20 @@ SNAPSHOT_FILE = "ticket.snapshot.md"
 RULES = {
     "L001": "Frontmatter present and parses",
     "L002": "Required frontmatter fields and types; no unknown or approval/PR fields",
-    "L003": "id equals the directory name; directory name matches the ticket.ref prefix",
-    "L004": "ticket.system matches the configured tracker",
+    "L003": "id equals the directory name; a ticket spec's directory has the ticket prefix, "
+    "an intent spec's is YYYY-MM-DD-<slug>",
+    "L004": "ticket.system matches the configured tracker (ticket specs)",
     "L005": "Required sections present, in any order",
     "L006": "AC-n unique; at least one criterion not struck",
     "L007": "No acceptance criterion removed compared to --base (strike it instead)",
     "L008": "With --ready: no open questions",
     "L009": "Every attachment exists in the spec directory",
-    "L010": "ticket.snapshot.md exists, parses, and matches ticket.snapshot.content_sha256",
+    "L010": "ticket.snapshot.md exists, parses, and matches ticket.snapshot.content_sha256 (ticket specs)",
     "L011": "With --base: a changed body bumps revision and adds a matching Revisions entry",
     "L012": "state: superseded requires superseded_by",
     "L013": "Acceptance-criterion-like lines that are not canonical criteria",
+    "L014": "The spec names its intent: an intent block, a ticket, or both",
+    "L015": "The intent file named by intent.file exists in the spec directory",
 }
 
 REQUIRED_SECTIONS = (
@@ -59,6 +62,7 @@ FORBIDDEN_FIELDS = ("approved", "approvers", "pr", "status")
 _TOP_FIELDS = {
     "id",
     "title",
+    "intent",
     "ticket",
     "revision",
     "state",
@@ -69,6 +73,8 @@ _TOP_FIELDS = {
 }
 _TICKET_FIELDS = {"system", "ref", "url", "snapshot"}
 _SNAPSHOT_FIELDS = {"content_sha256", "updated_at", "taken_by", "taken_at"}
+_INTENT_FIELDS = {"file", "content_sha256", "recorded_at", "recorded_by"}
+_DATE_ID = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 _TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
@@ -119,6 +125,7 @@ class _SpecLinter:
         fm = spec.frontmatter
         self.fields(fm)
         self.naming(fm)
+        self.intent_source(fm)
         self.system(fm)
         self.sections()
         self.criteria()
@@ -166,7 +173,11 @@ class _SpecLinter:
         if fm.get("superseded_by") is not None and not _nonempty_str(fm["superseded_by"]):
             self.add("L002", self.line_of("superseded_by"), "'superseded_by' must be a spec id or null")
 
-        ticket = fm.get("ticket")
+        if "intent" in fm:
+            self.intent_fields(fm["intent"])
+        if "ticket" not in fm:
+            return
+        ticket = fm["ticket"]
         if not isinstance(ticket, dict):
             self.add("L002", self.line_of("ticket"), "'ticket' must be a mapping with system and ref")
             return
@@ -184,6 +195,31 @@ class _SpecLinter:
             self.add("L002", self.line_of("ticket.url"), "'ticket.url' must be a string")
         if "snapshot" in ticket:
             self.snapshot_fields(ticket["snapshot"])
+
+    def intent_fields(self, intent: Any) -> None:
+        if not isinstance(intent, dict):
+            self.add(
+                "L002", self.line_of("intent"), "'intent' must be a mapping with file and content_sha256"
+            )
+            return
+        for key in intent:
+            if key not in _INTENT_FIELDS:
+                self.add("L002", self.line_of(f"intent.{key}"), f"unknown field 'intent.{key}'")
+        self.require_str(intent, "file", "intent.")
+        if not (isinstance(intent.get("content_sha256"), str) and _SHA.match(intent["content_sha256"])):
+            self.add(
+                "L002",
+                self.line_of("intent.content_sha256")
+                if "content_sha256" in intent
+                else self.line_of("intent"),
+                "'intent.content_sha256' must be 64 lowercase hex characters",
+            )
+        if "recorded_at" in intent and not _timestamp(intent["recorded_at"]):
+            self.add(
+                "L002", self.line_of("intent.recorded_at"), "'intent.recorded_at' must be a UTC timestamp"
+            )
+        if "recorded_by" in intent and not _nonempty_str(intent["recorded_by"]):
+            self.add("L002", self.line_of("intent.recorded_by"), "'intent.recorded_by' must be a name")
 
     def snapshot_fields(self, snap: Any) -> None:
         if not isinstance(snap, dict):
@@ -230,6 +266,9 @@ class _SpecLinter:
                 self.line_of("id"),
                 f"id '{fm['id']}' does not match the directory name '{self.dir.name}'",
             )
+        if "ticket" not in fm:
+            self.date_id(fm)
+            return
         ticket = fm.get("ticket")
         if not isinstance(ticket, dict) or not _nonempty_str(ticket.get("ref")):
             return
@@ -244,6 +283,43 @@ class _SpecLinter:
                 "L003",
                 self.line_of("ticket.ref"),
                 f"directory '{self.dir.name}' does not start with '{prefix}-', the prefix of {key.ref()}",
+            )
+
+    def date_id(self, fm: dict[str, Any]) -> None:
+        if not _nonempty_str(fm.get("id")):
+            return
+        match = _DATE_ID.match(fm["id"])
+        valid = bool(match)
+        if match:
+            try:
+                datetime.date.fromisoformat(match["date"])
+            except ValueError:
+                valid = False
+        if not valid:
+            self.add(
+                "L003",
+                self.line_of("id"),
+                f"id '{fm['id']}' must be YYYY-MM-DD-<slug> with a real date when the spec has no ticket",
+            )
+
+    # L014, L015
+    def intent_source(self, fm: dict[str, Any]) -> None:
+        if "intent" not in fm and "ticket" not in fm:
+            self.add("L014", self.line_of("id"), "the spec names no intent: add an intent block or a ticket")
+            return
+        intent = fm.get("intent")
+        if not isinstance(intent, dict) or not _nonempty_str(intent.get("file")):
+            return  # L002 reports the shape
+        name = intent["file"]
+        if name.startswith("/") or ".." in Path(name).parts:
+            self.add(
+                "L015", self.line_of("intent.file"), f"intent file '{name}' must be inside the spec directory"
+            )
+        elif not (self.dir / name).is_file():
+            self.add(
+                "L015",
+                self.line_of("intent.file"),
+                f"intent file '{name}' does not exist in the spec directory",
             )
 
     # L004
@@ -304,6 +380,8 @@ class _SpecLinter:
 
     # L010
     def snapshot(self, fm: dict[str, Any]) -> None:
+        if "ticket" not in fm:
+            return  # intent specs have no ticket receipt
         ticket = fm.get("ticket")
         snap = ticket.get("snapshot") if isinstance(ticket, dict) else None
         if not isinstance(snap, dict):

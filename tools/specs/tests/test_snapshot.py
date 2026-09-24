@@ -8,6 +8,7 @@ from sdlc_specs.snapshot import (
     apply_snapshot,
     apply_snapshot_text,
     content_sha256,
+    intent_sha256,
     normalise,
     parse_snapshot_file,
     render_snapshot_file,
@@ -185,3 +186,16 @@ class WorkflowExampleFixtureTest(OfflineTestCase):
         raw = (spec_dir / "spec.md").read_text()
         self.assertIn("updated_at: 2026-09-23T10:14:00Z # informational only, see 5.1", raw)
         self.assertIsInstance(yaml.safe_load(raw.split("---")[1]), dict)
+
+
+class IntentHashTest(OfflineTestCase):
+    def test_pinned_intent_hash(self):
+        # Computed independently: printf '# Intent: x\\n\\nLine' | sha256sum. This value is
+        # committed in product repos: never update it to make this test pass.
+        self.assertEqual(
+            intent_sha256("\r\n# Intent: x  \r\n\r\nLine\t\r\n\r\n"),
+            "28ceecc90a8e69fc7e826cb28db2f46df53c4415d0aeb1284a710c97be6fe24d",
+        )
+
+    def test_whole_file_is_hashed(self):
+        self.assertNotEqual(intent_sha256("# Intent: x\n\nA"), intent_sha256("# Intent: x\n\nB"))

@@ -94,17 +94,19 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 |---|---|
 | `L001` | `spec.md` exists and its frontmatter parses |
 | `L002` | Required frontmatter fields and types; no unknown fields; no `approved`, `approvers`, `pr` or `status` |
-| `L003` | `id` equals the directory name; the directory name starts with the `ticket.ref` prefix |
-| `L004` | `ticket.system` matches the configured tracker |
+| `L003` | `id` equals the directory name; a ticket spec's directory starts with the `ticket.ref` prefix, an intent spec's id is `YYYY-MM-DD-<slug>` with a real date |
+| `L004` | Ticket specs: `ticket.system` matches the configured tracker |
 | `L005` | All template sections present, in any order |
 | `L006` | `AC-n` numbers unique; at least one criterion not struck |
 | `L007` | With `--base`: no criterion removed (strike it through instead) |
 | `L008` | With `--ready`: no open questions |
 | `L009` | Every `attachments` entry exists inside the spec directory |
-| `L010` | `ticket.snapshot.md` exists, is unedited, and matches `ticket.snapshot.content_sha256` |
+| `L010` | Ticket specs: `ticket.snapshot.md` exists, is unedited, and matches `ticket.snapshot.content_sha256` |
 | `L011` | With `--base`: a changed body bumps `revision` and adds a matching `## Revisions` entry |
 | `L012` | `state: superseded` requires `superseded_by` |
 | `L013` | A line that looks like an acceptance criterion but isn't one (wrong form, wrong section, in a code block) |
+| `L014` | The spec names its intent: an `intent` block, a `ticket`, or both |
+| `L015` | The file named by `intent.file` exists in the spec directory |
 
 JSON output:
 
@@ -117,19 +119,37 @@ JSON output:
 ### `new`
 
 ```sh
+tools/specs/specs new --title <title> [--slug <slug>] [--date YYYY-MM-DD] [--intent-file <path>] [--supersedes <id>]
 tools/specs/specs new --key <ticket> --title <title> [--slug <slug>] [--supersedes <id>]
 ```
 
-Creates `<specs_dir>/<ticket-prefix>-<slug>/spec.md` from the template, with `revision: 1`,
-`state: active` and a placeholder `AC-1`. The ticket snapshot is not taken yet, so `lint` reports
-only `L010` until it is. Exits 1 without writing anything when the ticket already has a spec
-directory.
+Creates a spec directory. Exits 1 without writing anything when the directory already exists.
+
+- **Intent spec** (the default): `<specs_dir>/<date>-<slug>/` with `spec.md` and `intent.md`.
+  The date is today in UTC unless `--date` is given; the slug comes from the title unless
+  `--slug` is given. `intent.md` is the intent template filled with the title, or a byte copy
+  of `--intent-file`. The spec's frontmatter records the intent file's hash:
+
+  ```yaml
+  intent:
+    file: intent.md
+    content_sha256: 4f1c...          # sha256 of the normalised intent file
+    recorded_at: 2026-09-23T11:02:00Z
+    recorded_by: jdoe
+  ```
+
+- **Ticket spec** (`--key`): named after the ticket; `lint` reports only `L010` until a ticket
+  snapshot is taken.
+
+Templates come from `<specs_dir>/templates/spec.md` and `intent.md` when a team has them,
+else from the helper's own. The spec template is the body only; `new` writes the frontmatter
+itself. Placeholders: `$title`, `$intent`, `$date`, `$author`.
 
 With `--supersedes <id>`, the new spec lists `<id>` under `supersedes`, and the old spec gets
 `state: superseded` and `superseded_by: <new id>`, edited in place so the rest of the file is
-unchanged. A missing or already superseded spec exits 1 without writing anything.
+unchanged.
 
-JSON output: `{"ok": true, "path": "specs/eng-123-webhook-retries", "id": "eng-123-webhook-retries"}`.
+JSON output: `{"ok": true, "path": "specs/2026-09-23-webhook-retries", "id": "2026-09-23-webhook-retries"}`.
 
 ## Development
 

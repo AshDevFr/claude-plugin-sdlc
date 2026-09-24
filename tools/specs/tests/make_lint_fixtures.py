@@ -18,6 +18,8 @@ from pathlib import Path
 
 TOOL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL))
+from sdlc_specs.new import TEMPLATES, render_body, render_frontmatter  # noqa: E402
+from sdlc_specs.snapshot import intent_sha256  # noqa: E402
 
 FIXTURES = TOOL / "tests" / "fixtures"
 EXAMPLE = FIXTURES / "specs/123-prorate-plan-changes"
@@ -195,5 +197,46 @@ fixture(
     rule="L013",
     needle="AC-4: something",
 )
+
+# Intent specs: the base is what `specs new` writes, with fixed dates and author.
+INTENT_NAME = "2026-09-23-webhook-retries"
+INTENT_TEXT = render_body((TEMPLATES / "intent.md").read_text(), "Webhook retries", "", "2026-09-23", "jdoe")
+INTENT_SPEC = render_frontmatter(
+    INTENT_NAME,
+    "Webhook retries",
+    intent={
+        "file": "intent.md",
+        "content_sha256": intent_sha256(INTENT_TEXT),
+        "recorded_at": "2026-09-23T11:02:00Z",
+        "recorded_by": "jdoe",
+    },
+) + render_body(
+    (TEMPLATES / "spec.md").read_text(), "Webhook retries", "[intent.md](intent.md)", "2026-09-23", "jdoe"
+)
+
+
+def intent_fixture(fixture_name, spec, *, rule=None, needle=None, line=None, intent=INTENT_TEXT):
+    target = OUT / fixture_name / "head" / INTENT_NAME
+    target.mkdir(parents=True)
+    (target / "spec.md").write_text(spec)
+    if intent is not None:
+        (target / "intent.md").write_text(intent)
+    if rule:
+        if line is None:
+            line = line_of(spec, needle)
+        (OUT / fixture_name / "expected.json").write_text(
+            json.dumps({"rule": rule, "path": f"specs/{INTENT_NAME}/spec.md", "line": line}, indent=2) + "\n"
+        )
+
+
+# L014: an intent spec passes; a spec with neither intent nor ticket fails (reported at the id)
+intent_fixture("L014-pass", INTENT_SPEC)
+start = INTENT_SPEC.index("intent:\n")
+end = INTENT_SPEC.index("revision: 1")
+intent_fixture("L014-fail", INTENT_SPEC[:start] + INTENT_SPEC[end:], rule="L014", needle="id: ")
+
+# L015: the intent file must exist
+intent_fixture("L015-pass", INTENT_SPEC)
+intent_fixture("L015-fail", INTENT_SPEC, intent=None, rule="L015", needle="file: intent.md")
 
 print("\n".join(sorted(p.name for p in OUT.iterdir())))

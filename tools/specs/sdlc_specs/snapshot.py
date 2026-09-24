@@ -39,6 +39,16 @@ def content_sha256(title: str, description: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def intent_sha256(text: str) -> str:
+    """Frozen: lowercase hex sha256 of `normalise(text)`, UTF-8, over a whole intent file.
+
+    Recorded in a spec's frontmatter when the spec is written, and compared later to tell the
+    engineer the intent has changed since. Committed in product repos, so the same rule as
+    `content_sha256` applies: never change it silently; a new algorithm needs a new name.
+    """
+    return hashlib.sha256(normalise(text).encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class Snapshot:
     content_sha256: str

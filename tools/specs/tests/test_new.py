@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from sdlc_specs.frontmatter import set_top_level
+from sdlc_specs.snapshot import intent_sha256
 from sdlc_specs.spec import parse_spec
 
 from tests.base import OfflineTestCase
@@ -128,6 +129,108 @@ class NewTest(NewRepoTestCase):
         self.config(LINEAR_CONFIG)
         result = self.specs_cmd("new", "--key", "123", "--title", "x")
         self.assertEqual(result.returncode, 2)
+
+
+class IntentSpecTest(NewRepoTestCase):
+    """Specs whose intent is a local intent.md, named by creation date and slug."""
+
+    def new(self, *args: str):
+        return self.specs_cmd("new", *args)
+
+    def test_creates_a_date_named_spec_that_lints_clean(self):
+        self.config(GITHUB_CONFIG)
+        result = self.new("--date", "2026-09-23", "--title", "Webhook retries")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spec_dir = self.specs / "2026-09-23-webhook-retries"
+        self.assertTrue((spec_dir / "spec.md").is_file())
+        self.assertTrue((spec_dir / "intent.md").is_file())
+        lint = self.specs_cmd("--json", "lint", str(spec_dir))
+        self.assertEqual(lint.returncode, 0, lint.stdout + lint.stderr)
+        self.assertEqual(json.loads(lint.stdout)["findings"], [])
+
+    def test_frontmatter_records_the_intent(self):
+        self.config(GITHUB_CONFIG)
+        self.assertEqual(self.new("--date", "2026-09-23", "--title", "Webhook retries").returncode, 0)
+        spec_dir = self.specs / "2026-09-23-webhook-retries"
+        spec = parse_spec(spec_dir / "spec.md")
+        fm = spec.frontmatter
+        self.assertEqual(fm["id"], "2026-09-23-webhook-retries")
+        self.assertNotIn("ticket", fm)
+        self.assertEqual(fm["intent"]["file"], "intent.md")
+        self.assertEqual(fm["intent"]["content_sha256"], intent_sha256((spec_dir / "intent.md").read_text()))
+        self.assertEqual(fm["intent"]["recorded_by"], "jdoe")
+        self.assertIn("recorded_at", fm["intent"])
+        self.assertEqual((fm["revision"], fm["state"]), (1, "active"))
+        self.assertEqual([c.number for c in spec.criteria], [1])
+
+    def test_intent_comes_from_the_template(self):
+        self.config(GITHUB_CONFIG)
+        self.new("--date", "2026-09-23", "--title", "Webhook retries")
+        intent = (self.specs / "2026-09-23-webhook-retries" / "intent.md").read_text()
+        self.assertTrue(intent.startswith("# Intent: Webhook retries\n"))
+        for section in (
+            "Problem",
+            "Proposed outcome",
+            "Affected users and systems",
+            "Constraints",
+            "Open questions",
+        ):
+            self.assertIn(f"\n## {section}\n", intent)
+
+    def test_same_day_same_slug_is_refused(self):
+        self.config(GITHUB_CONFIG)
+        self.assertEqual(self.new("--date", "2026-09-23", "--title", "Webhook retries").returncode, 0)
+        before = tree_digest(self.specs)
+        again = self.new("--date", "2026-09-23", "--title", "Webhook retries")
+        self.assertEqual(again.returncode, 1)
+        self.assertIn("specs/2026-09-23-webhook-retries", again.stderr)
+        self.assertEqual(tree_digest(self.specs), before)
+        other = self.new("--date", "2026-09-23", "--title", "Webhook retries", "--slug", "retries-v2")
+        self.assertEqual(other.returncode, 0, other.stderr)
+        self.assertTrue((self.specs / "2026-09-23-retries-v2" / "spec.md").is_file())
+
+    def test_intent_file_is_copied_byte_for_byte(self):
+        self.config(GITHUB_CONFIG)
+        source = self.root / "notes" / "request.md"
+        source.parent.mkdir()
+        source.write_bytes(b"# Intent: from a file\r\n\r\n## Problem\r\nIt is slow.  \r\n")
+        result = self.new("--date", "2026-09-23", "--title", "Faster", "--intent-file", str(source))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spec_dir = self.specs / "2026-09-23-faster"
+        self.assertEqual((spec_dir / "intent.md").read_bytes(), source.read_bytes())
+        fm = parse_spec(spec_dir / "spec.md").frontmatter
+        self.assertEqual(fm["intent"]["content_sha256"], intent_sha256(source.read_text()))
+
+    def test_repo_templates_win_over_the_helpers(self):
+        self.config(GITHUB_CONFIG)
+        templates = self.specs / "templates"
+        templates.mkdir()
+        (templates / "spec.md").write_text(
+            "# $title\n\nCUSTOM BODY costs $$5\n\n## Acceptance criteria\n- **AC-1** Something.\n"
+        )
+        (templates / "intent.md").write_text("# Intent: $title\n\nCUSTOM INTENT\n")
+        self.assertEqual(self.new("--date", "2026-09-23", "--title", "Custom").returncode, 0)
+        spec_dir = self.specs / "2026-09-23-custom"
+        self.assertIn("CUSTOM BODY costs $5", (spec_dir / "spec.md").read_text())
+        self.assertEqual((spec_dir / "intent.md").read_text(), "# Intent: Custom\n\nCUSTOM INTENT\n")
+
+    def test_date_defaults_to_today_in_utc(self):
+        import datetime
+
+        self.config(GITHUB_CONFIG)
+        result = self.new("--title", "Today")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        self.assertTrue((self.specs / f"{today}-today").is_dir(), list(self.specs.iterdir()))
+
+    def test_bad_date_and_mixed_modes_are_usage_errors(self):
+        self.config(GITHUB_CONFIG)
+        self.assertEqual(self.new("--date", "2026-02-30", "--title", "x").returncode, 2)
+        self.assertEqual(self.new("--key", "7", "--date", "2026-09-23", "--title", "x").returncode, 2)
+        self.assertEqual(self.new("--key", "7", "--intent-file", "x.md", "--title", "x").returncode, 2)
+        missing = self.new("--title", "x", "--intent-file", "nope.md")
+        self.assertEqual(missing.returncode, 2)
+        self.assertEqual([p.name for p in self.specs.iterdir()], ["config.yml"])
 
 
 class SupersedesTest(NewRepoTestCase):

@@ -1,25 +1,32 @@
-"""`specs new`: create a spec directory and `spec.md` from the template.
+"""`specs new`: create a spec directory from the templates.
 
-The snapshot is left out: taking it needs the tracker, and until then `lint` reports `L010`
-("no snapshot yet") and nothing else.
+Two kinds of spec. An intent spec (the default) is named `<date>-<slug>`, gets an `intent.md`
+from the intent template or a given file, and records that file's hash, so a later change to
+the intent can be reported. A ticket spec (`--key`) is named after the ticket and has no
+snapshot until one is taken; `lint` reports `L010` for it until then.
 """
 
 import argparse
 import datetime
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 from string import Template
 
 from . import cli
-from .errors import CheckFailed
+from .config import Config
+from .errors import CheckFailed, UsageError
 from .frontmatter import scalar, set_top_level
-from .keys import Keys
+from .keys import Keys, slugify
 from .output import Output
+from .snapshot import intent_sha256
 from .spec import SpecParseError, parse_spec_text
 
-TEMPLATE = Path(__file__).resolve().parent / "templates" / "spec.md"
+TEMPLATES = Path(__file__).resolve().parent / "templates"
+INTENT_FILE = "intent.md"
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _author(root: Path) -> str:
@@ -31,18 +38,62 @@ def _author(root: Path) -> str:
     return name.replace("(", "").replace(")", "")
 
 
-def render_spec(spec_id: str, title: str, system: str, ref: str, supersedes: list[str], author: str) -> str:
-    return Template(TEMPLATE.read_text(encoding="utf-8")).substitute(
-        id=scalar(spec_id),
-        title=scalar(title),
-        system=system,
-        ref=scalar(ref),
-        supersedes="[" + ", ".join(scalar(s) for s in supersedes) + "]",
-        heading=title,
-        intent=ref,
-        date=datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
-        author=author,
-    )
+def _now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def template_text(config: Config, root: Path, name: str) -> str:
+    """The team's copy in `<specs_dir>/templates/` when there is one, else the helper's."""
+    custom = config.specs_path(root) / "templates" / name
+    return (custom if custom.is_file() else TEMPLATES / name).read_text(encoding="utf-8")
+
+
+def render_body(template: str, title: str, intent: str, date: str, author: str) -> str:
+    # safe_substitute: a team's template may contain a `$` that is not a placeholder.
+    return Template(template).safe_substitute(title=title, intent=intent, date=date, author=author)
+
+
+def render_frontmatter(
+    spec_id: str,
+    title: str,
+    *,
+    intent: dict[str, str] | None = None,
+    ticket: dict[str, str] | None = None,
+    supersedes: list[str] = (),
+) -> str:
+    """Frontmatter in a fixed key order, written as text so every spec reads the same."""
+    lines = ["---", f"id: {scalar(spec_id)}", f"title: {scalar(title)}"]
+    if intent:
+        lines += [
+            "intent:",
+            f"  file: {scalar(intent['file'])}",
+            f"  content_sha256: {scalar(intent['content_sha256'])}",
+            f"  recorded_at: {intent['recorded_at']}",
+            f"  recorded_by: {scalar(intent['recorded_by'])}",
+        ]
+    if ticket:
+        lines += ["ticket:", f"  system: {ticket['system']}", f"  ref: {scalar(ticket['ref'])}", '  url: ""']
+    lines += [
+        "revision: 1",
+        "state: active",
+        "supersedes: [" + ", ".join(scalar(s) for s in supersedes) + "]",
+        "superseded_by: null",
+        "---",
+        "",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _parse_date(value: str | None) -> str:
+    if value is None:
+        return _now().date().isoformat()
+    try:
+        if not _DATE.match(value):
+            raise ValueError
+        return datetime.date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise UsageError(f"--date {value!r}: expected a real date as YYYY-MM-DD") from None
 
 
 def _superseding_edit(old_dir: Path, old_id: str, new_id: str) -> tuple[Path, str]:
@@ -63,45 +114,86 @@ def _superseding_edit(old_dir: Path, old_id: str, new_id: str) -> tuple[Path, st
 
 
 def _configure(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--key", required=True, help="the ticket: #123, group/project#123 or ENG-123")
-    parser.add_argument("--title", required=True, help="the spec title, usually the ticket title")
+    parser.add_argument("--title", required=True, help="the spec title")
     parser.add_argument("--slug", help="directory slug (default: from the title)")
+    parser.add_argument("--date", help="intent specs: the id's date, YYYY-MM-DD (default: today, UTC)")
+    parser.add_argument("--intent-file", metavar="PATH", help="intent specs: copy this file as intent.md")
+    parser.add_argument("--key", help="ticket specs: #123, group/project#123 or ENG-123")
     parser.add_argument("--supersedes", metavar="ID", help="id of the spec this one replaces")
 
 
-@cli.command("new", help="create a spec directory from the template", configure=_configure, needs_config=True)
-def run(args: argparse.Namespace, out: Output) -> cli.Result:
-    root, config = args.repo_root, args.config
-    keys = Keys(config, root)
-    key = keys.parse(args.key)
-    existing = keys.find_spec_dir(key)
-    if existing is not None:
-        raise CheckFailed(f"{key.ref()} already has a spec: {existing.relative_to(root).as_posix()}")
-
-    spec_id = keys.dir_name(key, args.slug or args.title)
-    specs = config.specs_path(root)
-    target = specs / spec_id
-    old_edit = (
-        _superseding_edit(specs / args.supersedes, args.supersedes, spec_id) if args.supersedes else None
-    )
-
-    text = render_spec(
-        spec_id,
-        args.title,
-        config.tracker_system,
-        key.ref(),
-        [args.supersedes] if args.supersedes else [],
-        _author(root),
-    )
+def _write(target: Path, files: dict[str, bytes], old_edit: tuple[Path, str] | None) -> None:
     target.mkdir(parents=True)
     try:
-        (target / "spec.md").write_text(text, encoding="utf-8")
+        for name, content in files.items():
+            (target / name).write_bytes(content)
         if old_edit:
             old_path, old_text = old_edit
             old_path.write_text(old_text, encoding="utf-8")
     except BaseException:
         shutil.rmtree(target, ignore_errors=True)
         raise
+
+
+@cli.command(
+    "new", help="create a spec directory from the templates", configure=_configure, needs_config=True
+)
+def run(args: argparse.Namespace, out: Output) -> cli.Result:
+    root, config = args.repo_root, args.config
+    specs = config.specs_path(root)
+    author = _author(root)
+    today = _now().date().isoformat()
+
+    if args.key:
+        if args.date or args.intent_file:
+            raise UsageError("--date and --intent-file are for intent specs; drop them or drop --key")
+        keys = Keys(config, root)
+        key = keys.parse(args.key)
+        existing = keys.find_spec_dir(key)
+        if existing is not None:
+            raise CheckFailed(f"{key.ref()} already has a spec: {existing.relative_to(root).as_posix()}")
+        spec_id = keys.dir_name(key, args.slug or args.title)
+        intent_label, intent_block, extra = key.ref(), None, {}
+        ticket = {"system": config.tracker_system, "ref": key.ref()}
+    else:
+        date = _parse_date(args.date)
+        slug = slugify(args.slug or args.title)
+        if not slug:
+            raise UsageError(f"{args.slug or args.title!r} gives an empty slug; pass --slug")
+        spec_id = f"{date}-{slug}"
+        if args.intent_file:
+            source = Path(args.intent_file)
+            if not source.is_file():
+                raise UsageError(f"--intent-file {args.intent_file}: no such file")
+            intent_bytes = source.read_bytes()
+        else:
+            intent_bytes = render_body(
+                template_text(config, root, INTENT_FILE), args.title, "", today, author
+            ).encode("utf-8")
+        intent_label = f"[{INTENT_FILE}]({INTENT_FILE})"
+        intent_block = {
+            "file": INTENT_FILE,
+            "content_sha256": intent_sha256(intent_bytes.decode("utf-8")),
+            "recorded_at": _now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "recorded_by": author,
+        }
+        extra = {INTENT_FILE: intent_bytes}
+        ticket = None
+
+    target = specs / spec_id
+    if target.exists():
+        raise CheckFailed(f"{target.relative_to(root).as_posix()} already exists; pick another --slug")
+    old_edit = (
+        _superseding_edit(specs / args.supersedes, args.supersedes, spec_id) if args.supersedes else None
+    )
+    text = render_frontmatter(
+        spec_id,
+        args.title,
+        intent=intent_block,
+        ticket=ticket,
+        supersedes=[args.supersedes] if args.supersedes else [],
+    ) + render_body(template_text(config, root, "spec.md"), args.title, intent_label, today, author)
+    _write(target, {"spec.md": text.encode("utf-8"), **extra}, old_edit)
 
     rel = target.relative_to(root).as_posix()
     out.print(rel)
