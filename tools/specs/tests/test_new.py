@@ -214,14 +214,20 @@ class IntentSpecTest(NewRepoTestCase):
         self.assertIn("CUSTOM BODY costs $5", (spec_dir / "spec.md").read_text())
         self.assertEqual((spec_dir / "intent.md").read_text(), "# Intent: Custom\n\nCUSTOM INTENT\n")
 
-    def test_date_defaults_to_today_in_utc(self):
+    def test_date_defaults_to_the_local_date(self):
         import datetime
 
         self.config(GITHUB_CONFIG)
-        result = self.new("--title", "Today")
+        # A zone whose date differs from UTC's right now: UTC-12 before noon UTC, UTC+14 after.
+        utc = datetime.datetime.now(datetime.timezone.utc)
+        hours = -12 if utc.hour < 12 else 14
+        env = {**GIT_ENV, "TZ": f"Etc/GMT{-hours:+d}"}  # POSIX zone names invert the sign
+        result = self.run_shim("new", "--title", "Today", cwd=self.root, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
-        self.assertTrue((self.specs / f"{today}-today").is_dir(), list(self.specs.iterdir()))
+        now = utc + datetime.timedelta(hours=hours)
+        spec_dir = self.specs / f"{now.date().isoformat()}-today"
+        self.assertTrue(spec_dir.is_dir(), list(self.specs.iterdir()))
+        self.assertRegex((spec_dir / "spec.md").read_text(), r"recorded_at: \S+Z\n")
 
     def test_bad_date_and_mixed_modes_are_usage_errors(self):
         self.config(GITHUB_CONFIG)

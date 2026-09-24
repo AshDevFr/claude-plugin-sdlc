@@ -81,17 +81,23 @@ substantial ones, and those grow attachments (threat model, diagrams, API schema
 │       ├── intent.md                       # the original request
 │       ├── spec.md                         # the contract
 │       ├── threat-model.md                 # optional attachments
-│       └── plan.local.md                   # gitignored, the engineer's working plan
+│       ├── plan.local.md                   # gitignored, the engineer's working plan
+│       └── handoff.local.md                # gitignored, where a paused session left off
 ├── CODEOWNERS                              # .gitlab/ or .github/ also valid
 └── .gitignore                              # includes: specs/**/*.local.md
 ```
 
-**Ids.** A spec's id is its creation date and a slug, `YYYY-MM-DD-<slug>`. It needs no
-coordination between engineers on parallel branches, reads well in `git log`, and never
-changes, even if a ticket is linked later. Keep slugs short: tests cite `<id>:AC-n`.
+**Ids.** A spec's id is its creation date (the engineer's local date) and a slug,
+`YYYY-MM-DD-<slug>`. It needs no coordination between engineers on parallel branches, reads
+well in `git log`, and never changes, even if a ticket is linked later. Keep slugs short: tests cite `<id>:AC-n`.
 
 **Plans.** `plan.local.md` is ignored by git on purpose. If a change deserves a committed plan
 (a multi-PR migration, say), rename it `plan.md` and commit it deliberately.
+
+**Handoffs.** `/sdlc:handoff` writes `handoff.local.md` when you pause: in-flight work,
+decisions not yet written down, dead ends, the next step. It stays out of git; the next session
+(yours or a colleague's on the same machine) resumes from it. Decisions that matter beyond the
+session belong in the spec's `## Decisions`.
 
 **Templates.** `/sdlc:init` copies the plugin's spec and intent templates into
 `specs/templates/`. Edit them to suit the team; new specs use the repository's copy.
@@ -489,7 +495,7 @@ repository; it doesn't call the tracker or the code host, and it touches no CI.
 | `/sdlc:implement` | `implement` | Implements from the spec and plan, test first, commits cite `AC-n` |
 | `/sdlc:bug` | `bug` | Reproduce, diagnose, fix, verify, kept apart |
 | `/sdlc:converge` | `converge` | Section 5.2: criteria against the diff, read-only |
-| `/sdlc:handoff` | `handoff` | The state of the work as text for the PR, when a change changes hands |
+| `/sdlc:handoff` | `handoff` | Pause and resume: writes the state of the work to `handoff.local.md`, never committed |
 | `/sdlc:commit-msg` | `commit-msg` | Commit message with the section 7 trailers; lints `specs/` first when it changed |
 | `/sdlc:pr-msg` | `pr-msg` | PR title and description from the spec, its revisions and the converge report |
 
