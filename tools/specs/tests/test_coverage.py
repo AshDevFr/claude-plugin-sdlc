@@ -126,6 +126,16 @@ class CoverageTest(CoverageTestCase):
         self.assertIn("AC-2 uncited", result.stdout)
 
 
+class TemplatesTest(CoverageTestCase):
+    def test_the_templates_directory_is_not_a_spec(self):
+        # /sdlc:init copies spec.md into <specs_dir>/templates/; it has no frontmatter.
+        self.write("specs/templates/spec.md", "# $title\n\n## Acceptance criteria\n- **AC-1** Describe it.\n")
+        self.write("tests/test_x.py", f"# {SPEC_ID}:AC-1\n# {SPEC_ID}:AC-2\n")
+        result = self.run_shim("coverage", cwd=self.root, env=GIT_ENV)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("templates", result.stdout + result.stderr)
+
+
 class GlobTest(OfflineTestCase):
     def test_default_globs(self):
         patterns = [glob_to_regex(g) for g in DEFAULT_TEST_GLOBS]

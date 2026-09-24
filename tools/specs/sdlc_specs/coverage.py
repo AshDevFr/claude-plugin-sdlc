@@ -14,6 +14,7 @@ from pathlib import Path
 from . import cli
 from .config import Config
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
+from .lint import _all_spec_dirs
 from .output import Output
 from .spec import SpecParseError, parse_spec
 
@@ -103,8 +104,7 @@ def coverage_of(spec_dir: Path, cited: dict[str, dict[int, list[str]]]) -> SpecC
 
 def _spec_dirs(root: Path, config: Config, paths: list[str]) -> list[Path]:
     if not paths:
-        specs = config.specs_path(root)
-        return sorted(p for p in specs.iterdir() if (p / "spec.md").is_file()) if specs.is_dir() else []
+        return sorted(p for p in _all_spec_dirs(config.specs_path(root)) if (p / "spec.md").is_file())
     dirs = []
     for raw in paths:
         path = Path(raw).resolve()
