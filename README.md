@@ -35,12 +35,54 @@ Then, in a product repository, run `/sdlc:init`.
 
 Requirements: Python 3.10+ and PyYAML on the machine running Claude Code.
 
+## Commands
+
+In the order a change usually meets them:
+
+| Command | What it does |
+|---|---|
+| `/sdlc:init` | Once per repository: config, templates, `.gitignore` entry, `CLAUDE.md` section; prints the code owner and code host settings to apply |
+| `/sdlc:start` | Turns a request (an `intent.md`, a file, pasted text) into a spec: assesses the intent, offers help with its gaps, drafts `spec.md` |
+| `/sdlc:clarify` | Works a spec's open questions down to decisions, one question at a time |
+| `/sdlc:analyze` | Read-only review of a spec against itself and its intent |
+| `/sdlc:check` | The local check before committing: lint, criteria no test cites, whether the intent changed; `--ready` for review readiness |
+| `/sdlc:propose` | Readiness as advice, then the spec commit message and the text for a spec-only draft PR |
+| `/sdlc:plan` | Writes the working plan, `plan.local.md`: test-first steps naming the criteria they serve |
+| `/sdlc:implement` | Works through the plan test first, a commit per step; stops when the spec turns out wrong |
+| `/sdlc:bug` | Assess, fix and test a bug as separate stages, the diagnosis written before any repair |
+| `/sdlc:sync` | Brings a spec back in step when its intent changed or it turned out wrong; supersedes a merged spec |
+| `/sdlc:converge` | Read-only verdict per criterion (covered, untested, missing, contradicted) and changes no criterion explains |
+| `/sdlc:commit-msg` | A commit message with the `Spec`, `Implements` and `Spec-Change` trailers |
+| `/sdlc:pr-msg` | A PR title and description from the spec and the criteria the branch implements |
+| `/sdlc:handoff` | Pause and resume a session through a local, git-ignored `handoff.local.md` |
+
+## Skills
+
+Loaded by the commands, or by Claude when the task matches:
+
+| Skill | What it holds |
+|---|---|
+| `workflow` | The model in brief, which command when, how to call the helper |
+| `spec-template` | The spec's frontmatter and sections, with guidance per section; the plan template |
+| `intent-writing` | The intent's sections, assessing an intent, offering help without gating |
+| `intent-sync` | What to do when a spec and its intent drift apart, case by case |
+| `commit-conventions` | The trailers, the `Spec-Change` kinds, squash settings per code host |
+| `test-first` | The failing-test-first loop, and how tests cite criteria |
+| `receiving-review` | Verifying review findings on a spec or code before acting on them |
+| `finishing-work` | What must be true before a PR is marked ready, in terms of `/sdlc:check` and `/sdlc:converge` |
+
+## Hooks
+
+Both advisory and silent outside a repository set up with `/sdlc:init`: a status line for the
+branch's spec at session start, and a reminder when Claude edits a pushed spec without bumping
+its revision.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `.claude-plugin/` | Plugin manifest and marketplace |
-| `tools/specs/` | The helper: parsing, lint, hashing, `new`, `intent`, `coverage`, `status` (see its README) |
+| `tools/specs/` | The helper: parsing, lint, hashing, `new`, `intent`, `coverage`, `status`, `check`, `trailers` (see its README) |
 | `docs/workflow.md` | The workflow, as guidance and best practices |
 | `bin/sdlc-sandbox`, `sandbox/` | Disposable repositories in scripted states, for trying the commands |
 
@@ -50,7 +92,12 @@ Requirements: Python 3.10+ and PyYAML on the machine running Claude Code.
 make venv   # .venv with PyYAML and ruff
 make test   # the helper's tests and the plugin's tests
 make lint
+make evals  # every command headless on Opus in throwaway repos: slow and billed (about $8), run before a release
 ```
+
+`make evals SCENARIOS="plan sync" MODEL=sonnet` runs a subset or another model. Each scenario
+builds a sandbox, runs the command with scripted answers and checks the repository afterwards
+(files, commits and trailers, `git status`); transcripts of failures land in `evals/results/`.
 
 To try the commands on something disposable, build a sandbox repository in one of the scripted
 states described under `sandbox/scenarios/`:
