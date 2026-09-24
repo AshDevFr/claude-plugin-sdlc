@@ -155,10 +155,12 @@ JSON output: `{"ok": true, "path": "specs/2026-09-23-webhook-retries", "id": "20
 ### `intent`
 
 ```sh
-tools/specs/specs intent check <spec-dir> [--diff]
-tools/specs/specs intent record <spec-dir>
-tools/specs/specs intent assess (<spec-dir> | --file <path>)
+tools/specs/specs intent check [<spec-dir>] [--diff]
+tools/specs/specs intent record [<spec-dir>]
+tools/specs/specs intent assess [<spec-dir> | --file <path>]
 ```
+
+Without `<spec-dir>`, each uses the current branch's spec (see `status`).
 
 `check` compares the intent file with the hash the spec recorded: `unchanged` (exit 0),
 `changed` or `not recorded` (exit 1). With `--diff` it prints the change since the recorded
@@ -186,6 +188,17 @@ Reports, per spec, which non-struck acceptance criteria are cited by a test file
 or untracked and not ignored) matching `coverage.test_globs`; `**/` spans directories, `*`
 stays within one. Citations of a struck or nonexistent criterion are listed separately. Exits
 1 when a criterion is uncited: advice that a test may be missing, not proof either way.
+
+### `status`
+
+```sh
+tools/specs/specs status
+```
+
+One line for the current branch's spec: `<id> r<revision>: <n> lint finding(s), intent <state>`
+(`n/a` for a ticket spec), or `no spec for this branch`, or `no branch` on a detached HEAD.
+The spec is the one whose id appears in the branch name (the longest when several do), else
+the spec of the ticket the branch names. Always exits 0; fast enough for a status line.
 
 ## Development
 

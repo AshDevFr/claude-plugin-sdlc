@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import cli
+from .branch import current_branch, spec_for_branch
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
 from .frontmatter import scalar, set_top_level_block
 from .new import INTENT_FILE, _author, template_text
@@ -173,7 +174,13 @@ def assess(text: str, template: str) -> tuple[list[tuple[str, str]], list[str]]:
     return states, _questions(sections.get(OPEN_QUESTIONS), guidance.get(OPEN_QUESTIONS, ""))
 
 
-def _spec_dir(root: Path, raw: str) -> Path:
+def _spec_dir(root: Path, raw: str | None, config=None) -> Path:
+    if raw is None:
+        branch = current_branch(root)
+        found = spec_for_branch(root, config, branch) if branch else None
+        if found is None:
+            raise UsageError("no spec for this branch; pass SPEC_DIR")
+        return found
     path = Path(raw).resolve()
     if path.is_file():
         path = path.parent
@@ -185,10 +192,10 @@ def _spec_dir(root: Path, raw: str) -> Path:
 def _configure(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="intent_command", metavar="<intent command>", required=True)
     check = sub.add_parser("check", help="has intent.md changed since the spec recorded it?")
-    check.add_argument("spec_dir", metavar="SPEC_DIR")
+    check.add_argument("spec_dir", metavar="SPEC_DIR", nargs="?", help="default: the current branch's spec")
     check.add_argument("--diff", action="store_true", help="show the change since the recorded version")
     rec = sub.add_parser("record", help="record intent.md's current hash in the spec")
-    rec.add_argument("spec_dir", metavar="SPEC_DIR")
+    rec.add_argument("spec_dir", metavar="SPEC_DIR", nargs="?", help="default: the current branch's spec")
     ass = sub.add_parser("assess", help="which intent template sections are missing, empty or untouched")
     ass.add_argument("spec_dir", metavar="SPEC_DIR", nargs="?")
     ass.add_argument("--file", metavar="PATH", help="assess this file instead of a spec's intent")
@@ -199,7 +206,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     root = args.repo_root.resolve()
     if args.intent_command == "assess":
         return _run_assess(args, out, root)
-    spec_dir = _spec_dir(root, args.spec_dir)
+    spec_dir = _spec_dir(root, args.spec_dir, args.config)
     rel = spec_dir.relative_to(root).as_posix()
 
     if args.intent_command == "record":
@@ -221,12 +228,12 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
 
 
 def _run_assess(args: argparse.Namespace, out: Output, root: Path) -> cli.Result:
-    if bool(args.file) == bool(args.spec_dir):
-        raise UsageError("give either SPEC_DIR or --file")
+    if args.file and args.spec_dir:
+        raise UsageError("give either SPEC_DIR or --file, not both")
     if args.file:
         path = Path(args.file)
     else:
-        spec_dir = _spec_dir(root, args.spec_dir)
+        spec_dir = _spec_dir(root, args.spec_dir, args.config)
         block = _intent_block(spec_dir, _spec_text(spec_dir))
         path = spec_dir / (block.get("file") if isinstance(block.get("file"), str) else INTENT_FILE)
     if not path.is_file():
