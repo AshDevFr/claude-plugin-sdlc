@@ -507,6 +507,7 @@ repository; it doesn't call the tracker or the code host, and it touches no CI.
 | `spec-template` | The frontmatter and body of section 3, with guidance per section |
 | `intent-writing` | The intent's sections, assessing an intent, offering help without gating |
 | `commit-conventions` | Trailers, `Spec-Change` kinds, squash settings per host |
+| `intent-sync` | Section 8's cases, what the intent hash records, amending without rewriting history |
 | `test-first`, `receiving-review`, `finishing-work` | Ported from `sdd`, with tests citing `AC-n` |
 
 ### 9.3 Hooks
