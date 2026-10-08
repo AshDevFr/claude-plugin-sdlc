@@ -66,9 +66,13 @@ As you go:
 
 ## Step 3: write it
 
-Write the file section by section in the template's shape: the `# Intent: <title>` heading, an
-`Author: <name> (<role or team>). Status: draft.` line, then the sections. Show it, and change
-what they want changed.
+Write the file section by section in the template's shape: the frontmatter with
+`status: draft`, the `# Intent: <title>` heading, an `Author: <name> (<role or team>).` line,
+then the sections. The helper's file already has the frontmatter; keep it at `draft`. Show the
+file, and change what they want changed.
+
+The status is theirs to move on, never yours: `ready-for-spec` once they're happy for a spec to
+be written from it, then `ready-for-code`, `done` or `dropped` as the work goes. Say so once.
 
 Then name what's still weak, in a few lines, using the skill's checks (a vague outcome, unclear
 scope, a solution written as the problem, a missing obvious constraint). Offer to work on them;

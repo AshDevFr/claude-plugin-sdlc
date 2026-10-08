@@ -33,6 +33,19 @@ If `check` reports open questions or an intent that changed, say so first: plann
 spec that's still moving plans the wrong thing. Suggest `/sdlc:clarify` or `/sdlc:sync`, and
 continue only if the engineer wants to.
 
+If `ready_to_implement` is false, a spec in `depends_on` isn't `done` yet: say so before
+planning, and name each blocking spec from `blocked_by` with its status. A plan can still be
+written, and often should be, but its steps must not assume code the blocking specs haven't
+delivered: say which steps wait on them. Continue only if the engineer wants to, and never
+change an intent's `status` yourself.
+
+A dependency whose status is `unknown (tracker)` is a ticket spec: whether it's done lives in
+the tracker, which the plugin doesn't read. Ask the engineer to confirm it there. With nobody to
+ask (an unattended run), check the code instead: run
+`"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" coverage <specs_dir>/<dependency-id>` and read
+the code its criteria describe; treat it as done only if the code shows every criterion is
+built, and say what you found.
+
 If `<spec-dir>/plan.local.md` already exists, read it: update it rather than starting over,
 and keep what's still true.
 

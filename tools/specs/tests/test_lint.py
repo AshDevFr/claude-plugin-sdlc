@@ -7,6 +7,8 @@ from pathlib import Path
 
 from sdlc_specs.config import load_config
 from sdlc_specs.lint import RULES, LintOptions, lint, select_spec_dirs
+from sdlc_specs.snapshot import intent_sha256
+from sdlc_specs.spec import parse_spec
 
 from tests.base import OfflineTestCase
 
@@ -342,3 +344,27 @@ class IntentSpecLintTest(LintRepoTestCase):
         self.make()
         self.assertNotIn("L010", self.rules())
         self.assertNotIn("L004", self.rules())
+
+    def test_intent_hash_is_v1_or_v2(self):
+        spec_dir = self.make()
+        spec = spec_dir / "spec.md"
+        recorded = parse_spec(spec).frontmatter["intent"]["content_sha256"]
+        self.assertTrue(recorded.startswith("sha256v2:"), recorded)
+        v1 = intent_sha256((spec_dir / "intent.md").read_text())
+        for value, rules in ((v1, []), ("sha256v3:" + v1, ["L002"]), ("sha256v2:" + v1[:10], ["L002"])):
+            with self.subTest(value=value):
+                spec.write_text(spec.read_text().replace(recorded, value))
+                self.assertEqual(self.rules(), rules)
+                recorded = value
+
+    def test_depends_on_is_a_list_of_spec_ids(self):
+        spec = self.make() / "spec.md"
+        text = spec.read_text()
+        for value in ("2026-09-20-delivery-log", "[1]", "{a: b}"):
+            with self.subTest(value=value):
+                spec.write_text(
+                    text.replace("superseded_by: null\n", f"superseded_by: null\ndepends_on: {value}\n")
+                )
+                findings = self.run_lint(ready=False)
+                self.assertEqual([f.rule for f in findings], ["L002"], [f.render() for f in findings])
+                self.assertIn("'depends_on' must be a list of strings", findings[0].message)

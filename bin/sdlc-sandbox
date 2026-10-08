@@ -81,15 +81,15 @@ class Sandbox:
     def switch(self, branch: str, create: bool = False) -> None:
         self.git("switch", "-q", *(["-c"] if create else []), branch)
 
-    def new_spec(self, title: str, slug: str, intent_text: str) -> str:
+    def new_spec(self, title: str, slug: str, intent_text: str, date: str = DATE) -> str:
         """Create an intent spec through the helper, the way /sdlc:start does."""
         source = self.root / ".sandbox-intent.md"
         source.write_text(intent_text, encoding="utf-8")
         try:
-            self.specs("new", "--date", DATE, "--title", title, "--slug", slug, "--intent-file", str(source))
+            self.specs("new", "--date", date, "--title", title, "--slug", slug, "--intent-file", str(source))
         finally:
             source.unlink()
-        return f"{DATE}-{slug}"
+        return f"{date}-{slug}"
 
 
 def build(target: Path, scenario: str | None) -> None:

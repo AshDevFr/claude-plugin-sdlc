@@ -4,7 +4,9 @@ import argparse
 
 from . import cli
 from .branch import current_branch, intent_only_for_branch, spec_for_branch
+from .deps import Graph
 from .intent import state_of
+from .intent_status import UNKNOWN_TRACKER
 from .lint import LintOptions, lint
 from .output import Output
 from .spec import SpecParseError, parse_spec
@@ -27,9 +29,16 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     spec_dir = spec_for_branch(root, config, branch)
     if spec_dir is None and (waiting := intent_only_for_branch(root, config, branch)) is not None:
         handoff = (waiting / HANDOFF_FILE).is_file()
-        out.print(_waiting(f"{waiting.name}: intent only, no spec yet", handoff))
+        status = Graph(config.specs_path(root)).node(waiting.name).status
+        out.print(_waiting(f"{waiting.name}: intent only, no spec yet, status {status}", handoff))
         return cli.Result(
-            data={"branch": branch, "spec": waiting.name, "intent": "intent only", "handoff": handoff}
+            data={
+                "branch": branch,
+                "spec": waiting.name,
+                "intent": "intent only",
+                "status": status,
+                "handoff": handoff,
+            }
         )
     if spec_dir is None:
         handoff = (config.specs_path(root) / HANDOFF_FILE).is_file()
@@ -44,8 +53,14 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     revision = fm.get("revision") if isinstance(fm.get("revision"), int) else None
     intent = state_of(spec_dir).state if "intent" in fm else "n/a"
     rev = f"r{revision}" if revision is not None else "r?"
+    readiness = Graph(config.specs_path(root)).readiness(spec_dir.name)
+    line = f"{spec_dir.name} {rev}: {len(findings)} lint finding(s), intent {intent}"
+    if readiness.status != UNKNOWN_TRACKER:  # a ticket spec's status is in its tracker
+        line += f", status {readiness.status}"
+    if readiness.blocked_by:
+        line += ", blocked by " + ", ".join(n.id for n in readiness.blocked_by)
     handoff = (spec_dir / HANDOFF_FILE).is_file()
-    out.print(_waiting(f"{spec_dir.name} {rev}: {len(findings)} lint finding(s), intent {intent}", handoff))
+    out.print(_waiting(line, handoff))
     return cli.Result(
         data={
             "branch": branch,
@@ -53,6 +68,9 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
             "revision": revision,
             "lint_findings": len(findings),
             "intent": intent,
+            "status": readiness.status,
+            "blocked_by": [n.id for n in readiness.blocked_by],
+            "ready_to_implement": readiness.ready_to_implement,
             "handoff": handoff,
         }
     )

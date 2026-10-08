@@ -113,6 +113,31 @@ class IntentSyncTest(unittest.TestCase):
                 self.assertIsNone(re.search(word, body, flags=re.I))
 
 
+class StatusAndDependenciesTest(unittest.TestCase):
+    STATUSES = ("draft", "ready-for-spec", "ready-for-code", "done", "dropped")
+
+    def test_intent_writing_names_every_status_and_who_sets_it(self):
+        _, body = read("intent-writing")
+        for status in self.STATUSES:
+            with self.subTest(status=status):
+                self.assertIn(f"`{status}`", body)
+        self.assertIn("never changes it", body)
+
+    def test_spec_template_has_depends_on(self):
+        _, body = read("spec-template")
+        self.assertIn("| `depends_on` |", body)
+
+    def test_intent_sync_says_a_status_change_is_not_an_intent_change(self):
+        _, body = read("intent-sync")
+        self.assertIn("sha256v2:", body)
+        self.assertIn("frontmatter", body)
+
+    def test_workflow_defines_ready_to_implement(self):
+        _, body = read("workflow")
+        self.assertIn("ready to implement", body)
+        self.assertIn('specs" deps', body)
+
+
 class PortedSkillsTest(unittest.TestCase):
     PORTED = ("test-first", "receiving-review")
 

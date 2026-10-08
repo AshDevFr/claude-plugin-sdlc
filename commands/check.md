@@ -34,7 +34,13 @@ One short block per spec:
 - **The intent**: `unchanged`, `changed`, `not recorded`, or `n/a` for a ticket spec. When it's
   `changed`, the intent was edited after the spec was written: name `/sdlc:sync` as the next
   step, which shows the change and walks through acknowledging or amending.
+- **The intent's status** (`draft`, `ready-for-spec`, `ready-for-code`, `done`, `dropped`, or
+  `unknown (tracker)` for a ticket spec) and, when there are any, the specs in `depends_on` that
+  aren't `done` yet (`blocked by`): the spec can't be built before them. A person moves the
+  status on in the intent's frontmatter; never change it yourself.
 - With `--ready`: whether the spec is ready for review, and the reasons when it isn't (open
   questions: `/sdlc:clarify`; template text left in a section; lint findings; the intent).
+  Dependencies never count against it: they say when the spec can be built, not whether it can
+  be reviewed.
 
 End with the one or two most useful next steps. Don't edit anything.

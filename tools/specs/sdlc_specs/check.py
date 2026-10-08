@@ -13,6 +13,7 @@ from . import cli
 from .branch import spec_dir_arg
 from .config import Config
 from .coverage import citations, coverage_of, test_files
+from .deps import Graph
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, UsageError
 from .intent import CHANGED, NOT_RECORDED, UNCHANGED, state_of
 from .lint import LintOptions, _all_spec_dirs, lint
@@ -60,6 +61,7 @@ def _reasons(findings: list[dict], intent: str) -> list[str]:
 def report(root: Path, config: Config, spec_dirs: list[Path], ready: bool) -> list[dict]:
     findings = [asdict(f) for f in lint(root, config, spec_dirs, LintOptions(ready=ready))]
     cited = citations(root, test_files(root, config.test_globs))
+    graph = Graph(config.specs_path(root))
     reports = []
     for spec_dir in spec_dirs:
         prefix = spec_dir.relative_to(root).as_posix() + "/"
@@ -69,9 +71,20 @@ def report(root: Path, config: Config, spec_dirs: list[Path], ready: bool) -> li
         except SpecParseError:
             uncited = []  # lint reports the parse error
         intent = _intent_state(spec_dir)
-        entry = {"spec": spec_dir.name, "lint": own, "uncited": uncited, "intent": intent}
+        readiness = graph.readiness(spec_dir.name)
+        entry = {
+            "spec": spec_dir.name,
+            "lint": own,
+            "uncited": uncited,
+            "intent": intent,
+            "status": readiness.status,
+            "blocked_by": [{"spec": n.id, "status": n.status} for n in readiness.blocked_by],
+            "ready_to_implement": readiness.ready_to_implement,
+        }
         if ready:
             # Readiness is for spec review, before code: uncited criteria don't count against it.
+            # Nor do unmet dependencies: they say when the spec can be built, not whether it is
+            # fit to review. They're reported in `blocked_by` either way.
             entry["reasons"] = _reasons(own, intent)
             entry["ready"] = not entry["reasons"]
         reports.append(entry)
@@ -98,6 +111,10 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         if entry["uncited"]:
             out.print(f"  uncited: {', '.join(entry['uncited'])}")
         out.print(f"  intent {entry['intent']}")
+        out.print(f"  status {entry['status']}")
+        if entry["blocked_by"]:
+            blocked = ", ".join(f"{b['spec']} ({b['status']})" for b in entry["blocked_by"])
+            out.print(f"  blocked by: {blocked}")
         if args.ready:
             verdict = "yes" if entry["ready"] else "no (" + ", ".join(entry["reasons"]) + ")"
             out.print(f"  ready: {verdict}")

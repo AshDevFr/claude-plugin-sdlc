@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 from sdlc_specs.frontmatter import set_top_level
-from sdlc_specs.snapshot import intent_sha256
+from sdlc_specs.snapshot import intent_sha256_v2
 from sdlc_specs.spec import parse_spec
 
 from tests.base import OfflineTestCase
@@ -157,7 +157,9 @@ class IntentSpecTest(NewRepoTestCase):
         self.assertEqual(fm["id"], "2026-09-23-webhook-retries")
         self.assertNotIn("ticket", fm)
         self.assertEqual(fm["intent"]["file"], "intent.md")
-        self.assertEqual(fm["intent"]["content_sha256"], intent_sha256((spec_dir / "intent.md").read_text()))
+        self.assertEqual(
+            fm["intent"]["content_sha256"], intent_sha256_v2((spec_dir / "intent.md").read_text())
+        )
         self.assertEqual(fm["intent"]["recorded_by"], "jdoe")
         self.assertIn("recorded_at", fm["intent"])
         self.assertEqual((fm["revision"], fm["state"]), (1, "active"))
@@ -167,7 +169,10 @@ class IntentSpecTest(NewRepoTestCase):
         self.config(GITHUB_CONFIG)
         self.new("--date", "2026-09-23", "--title", "Webhook retries")
         intent = (self.specs / "2026-09-23-webhook-retries" / "intent.md").read_text()
-        self.assertTrue(intent.startswith("# Intent: Webhook retries\n"))
+        # A new intent is a draft; the status is the frontmatter's, not a line of the body.
+        self.assertTrue(intent.startswith("---\nstatus: draft"), intent)
+        self.assertIn("\n---\n# Intent: Webhook retries\nAuthor: jdoe.\n", intent)
+        self.assertNotIn("Status:", intent)
         for section in (
             "Problem",
             "Proposed outcome",
@@ -199,7 +204,7 @@ class IntentSpecTest(NewRepoTestCase):
         spec_dir = self.specs / "2026-09-23-faster"
         self.assertEqual((spec_dir / "intent.md").read_bytes(), source.read_bytes())
         fm = parse_spec(spec_dir / "spec.md").frontmatter
-        self.assertEqual(fm["intent"]["content_sha256"], intent_sha256(source.read_text()))
+        self.assertEqual(fm["intent"]["content_sha256"], intent_sha256_v2(source.read_text()))
 
     def test_repo_templates_win_over_the_helpers(self):
         self.config(GITHUB_CONFIG)
@@ -237,6 +242,43 @@ class IntentSpecTest(NewRepoTestCase):
         missing = self.new("--title", "x", "--intent-file", "nope.md")
         self.assertEqual(missing.returncode, 2)
         self.assertEqual([p.name for p in self.specs.iterdir()], ["config.yml"])
+
+
+class DependsOnTest(NewRepoTestCase):
+    def new(self, *args: str):
+        return self.specs_cmd("new", *args)
+
+    def test_depends_on_is_written_and_lints_clean(self):
+        self.config(GITHUB_CONFIG)
+        for slug in ("delivery-log", "partner-ids"):
+            self.assertEqual(self.new("--date", "2026-09-20", "--title", slug).returncode, 0)
+        result = self.new(
+            "--date", "2026-09-23", "--title", "Webhook retries",
+            "--depends-on", "2026-09-20-delivery-log, 2026-09-20-partner-ids",
+        )  # fmt: skip
+        self.assertEqual(result.returncode, 0, result.stderr)
+        spec_dir = self.specs / "2026-09-23-webhook-retries"
+        text = (spec_dir / "spec.md").read_text()
+        self.assertIn(
+            "superseded_by: null\ndepends_on: [2026-09-20-delivery-log, 2026-09-20-partner-ids]\n---", text
+        )
+        lint = self.specs_cmd("lint", str(spec_dir))
+        self.assertEqual(lint.returncode, 0, lint.stdout + lint.stderr)
+
+    def test_without_it_there_is_no_field(self):
+        self.config(GITHUB_CONFIG)
+        self.assertEqual(self.new("--date", "2026-09-23", "--title", "Webhook retries").returncode, 0)
+        self.assertNotIn("depends_on", (self.specs / "2026-09-23-webhook-retries" / "spec.md").read_text())
+
+    def test_an_unknown_or_own_id_writes_nothing(self):
+        self.config(GITHUB_CONFIG)
+        before = tree_digest(self.specs)
+        for value in ("2026-01-01-nowhere", "2026-09-23-webhook-retries", "templates"):
+            with self.subTest(value=value):
+                result = self.new("--date", "2026-09-23", "--title", "Webhook retries", "--depends-on", value)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(value, result.stderr)
+                self.assertEqual(tree_digest(self.specs), before)
 
 
 class SupersedesTest(NewRepoTestCase):

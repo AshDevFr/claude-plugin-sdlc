@@ -66,7 +66,9 @@ class StatusTest(StatusTestCase):
         self.git("switch", "-q", "-c", f"jdoe/{spec_id}")
         result = self.specs("status")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), f"{spec_id} r1: 0 lint finding(s), intent unchanged")
+        self.assertEqual(
+            result.stdout.strip(), f"{spec_id} r1: 0 lint finding(s), intent unchanged, status draft"
+        )
         doc = self.status()
         self.assertEqual(
             {k: doc[k] for k in ("spec", "revision", "lint_findings", "intent")},
@@ -163,7 +165,8 @@ class HandoffTest(StatusTestCase):
         (self.root / "specs" / spec_id / "handoff.local.md").write_text("# Handoff\n")
         result = self.specs("status")
         self.assertEqual(
-            result.stdout.strip(), f"{spec_id} r1: 0 lint finding(s), intent unchanged, handoff waiting"
+            result.stdout.strip(),
+            f"{spec_id} r1: 0 lint finding(s), intent unchanged, status draft, handoff waiting",
         )
         self.assertIs(self.status()["handoff"], True)
 

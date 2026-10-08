@@ -4,6 +4,12 @@ The hash is the staleness anchor. It is committed in product repos and compared 
 ticket by the pipeline, so the algorithm below is frozen: changing it would make every committed
 snapshot look stale. If it must ever change, the new one gets a versioned prefix
 (`sha256v2:...`) and both are accepted during migration. Never edit it silently.
+
+The intent hash went through exactly that: `intent_sha256` (v1, recorded as bare hex) covers the
+whole file, and `intent_sha256_v2` (recorded as `sha256v2:<hex>`) leaves out the frontmatter
+where the intent's status lives. New records are v2; a record is always compared with the
+algorithm it was taken with, so v1 records already committed keep working (see `intent_hash`
+for why a v1 record also matches the intent without its frontmatter).
 """
 
 import hashlib
@@ -47,6 +53,55 @@ def intent_sha256(text: str) -> str:
     `content_sha256` applies: never change it silently; a new algorithm needs a new name.
     """
     return hashlib.sha256(normalise(text).encode("utf-8")).hexdigest()
+
+
+INTENT_V2_PREFIX = "sha256v2:"
+_BARE_SHA = re.compile(r"^[0-9a-f]{64}$")
+
+
+def intent_body(text: str) -> str:
+    """Frozen, part of v2: `normalise(text)` without a leading YAML frontmatter block, normalised
+    again. The block opens with a `---` first line and ends at the next `---` or `...` line; with
+    no closing line there is no block, and the whole text is the body."""
+    lines = normalise(text).split("\n")
+    if lines[0] == "---":
+        for index in range(1, len(lines)):
+            if lines[index] in ("---", "..."):
+                return normalise("\n".join(lines[index + 1 :]))
+    return "\n".join(lines)
+
+
+def intent_sha256_v2(text: str) -> str:
+    """Frozen: `sha256v2:` and the lowercase hex sha256 of `intent_body(text)`, UTF-8.
+
+    The frontmatter holds the intent's status, which people change as the work moves; a status
+    change is not a change to what was asked, so it must not report the intent changed.
+    """
+    return INTENT_V2_PREFIX + hashlib.sha256(intent_body(text).encode("utf-8")).hexdigest()
+
+
+def intent_hash(text: str, like: str | None = None) -> str:
+    """The hash to record for an intent (v2), or, given a recorded hash as `like`, the file's hash
+    in that record's algorithm.
+
+    A bare hex record is v1. Records like that were taken before intents had a frontmatter, so
+    one added later (and every status change in it) is not a change to the request: v1 is
+    applied to the whole file first, then to `intent_body(text)`, and the one that matches the
+    record is returned. v1 of the body is `normalise` of text that is already normalised, the
+    same bytes v2 hashes, so it is v2's hex without the prefix.
+    """
+    if like is not None and _BARE_SHA.match(like):
+        whole = intent_sha256(text)
+        body = intent_sha256_v2(text)[len(INTENT_V2_PREFIX) :]
+        return body if like == body and like != whole else whole
+    return intent_sha256_v2(text)
+
+
+def intent_hash_matches(recorded: str, text: str) -> bool:
+    """Whether `text` is the intent `recorded` was taken of, by the record's own algorithm."""
+    if not (_BARE_SHA.match(recorded) or recorded.startswith(INTENT_V2_PREFIX)):
+        return False
+    return intent_hash(text, like=recorded) == recorded
 
 
 @dataclass(frozen=True)

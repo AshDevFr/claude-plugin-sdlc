@@ -54,9 +54,10 @@ class IntentNewTest(IntentOnlyTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         doc = json.loads(result.stdout)
         self.assertEqual((doc["path"], doc["id"], doc["location"]), (f"intents/{ID}.md", ID, "intents"))
-        self.assertTrue(
-            (self.root / "intents" / f"{ID}.md").read_text().startswith("# Intent: Webhook retries")
-        )
+        text = (self.root / "intents" / f"{ID}.md").read_text()
+        # Created as a draft: the only status the plugin ever writes.
+        self.assertTrue(text.startswith("---\nstatus: draft "), text[:40])
+        self.assertIn("\n---\n# Intent: Webhook retries\n", text)
         self.assertFalse((self.root / "specs" / ID).exists())
 
     def test_into_an_intent_only_spec_directory_otherwise(self):
@@ -91,7 +92,7 @@ class IntentOnlyStateTest(IntentOnlyTestCase):
 
     def test_status_on_its_branch(self):
         self.git("switch", "-q", "-c", ID)
-        self.assertEqual(self.specs("status").stdout.strip(), f"{ID}: intent only, no spec yet")
+        self.assertEqual(self.specs("status").stdout.strip(), f"{ID}: intent only, no spec yet, status draft")
         doc = json.loads(self.specs("--json", "status").stdout)
         self.assertEqual((doc["spec"], doc["intent"]), (ID, "intent only"))
 

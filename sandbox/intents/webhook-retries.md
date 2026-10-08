@@ -1,5 +1,8 @@
+---
+status: ready-for-spec
+---
 # Intent: webhook retries
-Author: P. Martin (integrations). Status: draft.
+Author: P. Martin (integrations).
 ## Problem
 Partners miss events when their endpoint is briefly down: we send each webhook once and drop
 it on any error. Support handles about ten tickets a week asking us to resend events by hand.

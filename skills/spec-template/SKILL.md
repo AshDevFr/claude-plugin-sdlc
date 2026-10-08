@@ -23,8 +23,18 @@ frontmatter by hand.
 | `state` | `active` or `superseded` | `specs new --supersedes` |
 | `supersedes`, `superseded_by` | Links between a spec and the one that replaces it | `specs new --supersedes` |
 | `related`, `attachments` | Other specs or tickets; files in the directory | the engineer |
+| `depends_on` | Spec ids in this repository that must be implemented before this one can be | `specs new --depends-on` (asked by `/sdlc:start`), or the engineer |
 
 Never add approval, reviewer or PR fields: the code host knows those, and a copy would drift.
+Never add `status` either: where the request stands is the intent's, in `intent.md`'s
+frontmatter (the `intent-writing` skill), or the tracker's for a ticket spec.
+
+`related` only links; `depends_on` is a gate, as advice. A spec is **ready to implement** when
+every spec it depends on has an intent that is `done`; its own status doesn't count. A ticket
+spec has no status the plugin can read, so as a dependency it's `unknown (tracker)` and never
+counts as done until someone confirms it, or the code shows it's built. Lint checks that each id names a spec directory (`L018`), that a spec
+doesn't depend on itself (`L019`), and that no cycle runs through the repository's specs
+(`L020`).
 
 ## Sections
 

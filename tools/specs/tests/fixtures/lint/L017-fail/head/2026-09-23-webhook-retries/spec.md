@@ -3,7 +3,7 @@ id: 2026-09-23-webhook-retries
 title: Webhook retries
 intent:
   file: intent.md
-  content_sha256: 17cb36c866de7fccf4a5aa1281496bb2a9b4ed4348094c66f0237833aadafb07
+  content_sha256: sha256v2:fae92c0bee069ea0c3343a118ace27482248d6da38f210271a9c1506494d2ea9
   recorded_at: 2026-09-23T11:02:00Z
   recorded_by: jdoe
 revision: 1

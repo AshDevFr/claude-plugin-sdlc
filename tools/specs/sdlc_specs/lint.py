@@ -14,10 +14,11 @@ from typing import Any
 
 from . import cli
 from .config import Config
+from .deps import Graph, depends_on_of
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, ConfigError, UsageError
 from .keys import Keys
 from .output import Output
-from .snapshot import content_sha256, intent_sha256, normalise, parse_snapshot_file
+from .snapshot import content_sha256, intent_hash_matches, normalise, parse_snapshot_file
 from .spec import AC_SECTION, REVISIONS_SECTION, SpecParseError, _sections, parse_spec_text
 
 SPEC_FILE = "spec.md"
@@ -43,6 +44,9 @@ RULES = {
     "L015": "The intent file named by intent.file exists in the spec directory",
     "L016": "The intent file has not changed since the spec recorded its hash",
     "L017": "With --ready: no section still holds the template's guidance text",
+    "L018": "Every depends_on entry names a spec directory in this repository",
+    "L019": "A spec does not depend on itself",
+    "L020": "No dependency cycle across the repository's specs",
 }
 
 REQUIRED_SECTIONS = (
@@ -72,6 +76,7 @@ _TOP_FIELDS = {
     "supersedes",
     "superseded_by",
     "related",
+    "depends_on",
     "attachments",
 }
 _TICKET_FIELDS = {"system", "ref", "url", "snapshot"}
@@ -79,6 +84,8 @@ _SNAPSHOT_FIELDS = {"content_sha256", "updated_at", "taken_by", "taken_at"}
 _INTENT_FIELDS = {"file", "content_sha256", "recorded_at", "recorded_by"}
 _DATE_ID = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SHA = re.compile(r"^[0-9a-f]{64}$")
+# An intent hash is v1 (bare hex, the whole file) or v2 (`sha256v2:`, the body without frontmatter).
+_INTENT_SHA = re.compile(r"^(?:sha256v2:)?[0-9a-f]{64}$")
 _TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
@@ -129,8 +136,10 @@ class _SpecLinter:
         keys: Keys,
         options: LintOptions,
         guidance: dict[str, str] | None = None,
+        graph: Graph | None = None,
     ):
         self.guidance = guidance or {}
+        self.graph = graph or Graph(config.specs_path(root))
         self.dir = spec_dir
         self.root = root
         self.config = config
@@ -170,6 +179,7 @@ class _SpecLinter:
         self.attachments(fm)
         self.snapshot(fm)
         self.superseded(fm)
+        self.dependencies(fm)
         for warning in spec.warnings:
             self.add("L013", warning.line, warning.message)
         if self.options.base:
@@ -202,7 +212,7 @@ class _SpecLinter:
             self.add("L002", 1, "missing required field 'state'")
         elif fm["state"] not in STATES:
             self.add("L002", self.line_of("state"), f"'state' must be one of {', '.join(STATES)}")
-        for key in ("supersedes", "related", "attachments"):
+        for key in ("supersedes", "related", "depends_on", "attachments"):
             if key in fm and not _str_list(fm[key]):
                 self.add("L002", self.line_of(key), f"'{key}' must be a list of strings")
         if fm.get("superseded_by") is not None and not _nonempty_str(fm["superseded_by"]):
@@ -241,13 +251,15 @@ class _SpecLinter:
             if key not in _INTENT_FIELDS:
                 self.add("L002", self.line_of(f"intent.{key}"), f"unknown field 'intent.{key}'")
         self.require_str(intent, "file", "intent.")
-        if not (isinstance(intent.get("content_sha256"), str) and _SHA.match(intent["content_sha256"])):
+        if not (
+            isinstance(intent.get("content_sha256"), str) and _INTENT_SHA.match(intent["content_sha256"])
+        ):
             self.add(
                 "L002",
                 self.line_of("intent.content_sha256")
                 if "content_sha256" in intent
                 else self.line_of("intent"),
-                "'intent.content_sha256' must be 64 lowercase hex characters",
+                "'intent.content_sha256' must be 64 lowercase hex characters, bare or after 'sha256v2:'",
             )
         if "recorded_at" in intent and not _timestamp(intent["recorded_at"]):
             self.add(
@@ -367,9 +379,10 @@ class _SpecLinter:
                 self.line_of("intent.file"),
                 f"intent file '{name}' does not exist in the spec directory",
             )
-        elif isinstance(intent.get("content_sha256"), str) and _SHA.match(intent["content_sha256"]):
-            current = intent_sha256((self.dir / name).read_text(encoding="utf-8"))
-            if current != intent["content_sha256"]:
+        elif isinstance(intent.get("content_sha256"), str) and _INTENT_SHA.match(intent["content_sha256"]):
+            if not intent_hash_matches(
+                intent["content_sha256"], (self.dir / name).read_text(encoding="utf-8")
+            ):
                 self.add(
                     "L016",
                     self.line_of("intent.content_sha256"),
@@ -478,6 +491,20 @@ class _SpecLinter:
     def superseded(self, fm: dict[str, Any]) -> None:
         if fm.get("state") == "superseded" and not _nonempty_str(fm.get("superseded_by")):
             self.add("L012", self.line_of("state"), "state is superseded but superseded_by is not set")
+
+    # L018, L019, L020
+    def dependencies(self, fm: dict[str, Any]) -> None:
+        if not _str_list(fm.get("depends_on")):
+            return  # absent, or L002 reports the shape
+        line = self.line_of("depends_on")
+        for dep in depends_on_of(fm):
+            if dep == self.dir.name:
+                self.add("L019", line, f"the spec depends on itself ('{dep}')")
+            elif "/" in dep or dep in (".", "..", TEMPLATES_DIR) or not (self.graph.specs / dep).is_dir():
+                self.add("L018", line, f"depends_on '{dep}' names no spec directory in this repository")
+        cycle = self.graph.cycle_through(self.dir.name)
+        if cycle:
+            self.add("L020", line, "depends_on forms a cycle: " + " -> ".join(cycle))
 
     # L007, L011
     def against_base(self, text: str) -> None:
@@ -603,9 +630,12 @@ def lint(root: Path, config: Config, spec_dirs: list[Path], options: LintOptions
         _verify_ref(root, options.base)
     keys = Keys(config, root)
     guidance = template_guidance(config, root) if options.ready else {}
+    graph = Graph(config.specs_path(root.resolve()))
     findings: list[Finding] = []
     for spec_dir in spec_dirs:
-        findings += _SpecLinter(spec_dir.resolve(), root.resolve(), config, keys, options, guidance).run()
+        findings += _SpecLinter(
+            spec_dir.resolve(), root.resolve(), config, keys, options, guidance, graph
+        ).run()
     if options.only is not None:
         findings = [f for f in findings if f.rule in options.only]
     return sorted(findings, key=lambda f: (f.path, f.line if f.line is not None else 0, f.rule))

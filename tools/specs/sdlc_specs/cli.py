@@ -26,6 +26,7 @@ _BUILTIN_COMMAND_MODULES: tuple[str, ...] = (
     "sdlc_specs.init",
     "sdlc_specs.check",
     "sdlc_specs.trailers",
+    "sdlc_specs.deps",
 )
 
 

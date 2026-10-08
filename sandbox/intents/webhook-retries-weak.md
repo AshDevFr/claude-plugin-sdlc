@@ -1,5 +1,8 @@
+---
+status: draft
+---
 # Intent: webhook retries
-Author: P. Martin (integrations). Status: draft.
+Author: P. Martin (integrations).
 ## Proposed outcome
 Make webhooks more reliable.
 ## Affected users and systems

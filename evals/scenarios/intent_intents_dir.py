@@ -20,7 +20,9 @@ def check(c, repo, runs):
     if not c.that(len(files) == 1 and files[0].endswith("-webhook-retries.md"), f"intents/: {files}"):
         return
     path = f"intents/{files[0]}"
-    c.that(repo.read(path).startswith("# Intent: Webhook retries"), "no '# Intent:' title")
+    text = repo.read(path)
+    c.that(text.startswith("---\nstatus: draft"), "no 'status: draft' frontmatter")
+    c.that("\n# Intent: Webhook retries" in text, "no '# Intent:' title")
     c.that(
         not intent_sections_filled(repo, path), f"sections not filled: {intent_sections_filled(repo, path)}"
     )

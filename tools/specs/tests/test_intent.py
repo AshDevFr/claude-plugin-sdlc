@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from sdlc_specs.frontmatter import set_top_level_block
+from sdlc_specs.snapshot import intent_sha256
 from sdlc_specs.spec import parse_spec
 
 from tests.base import OfflineTestCase
@@ -118,6 +119,68 @@ class CheckTest(IntentRepoTestCase):
         self.assertIs(doc["ok"], False)
         self.assertEqual(doc["state"], "changed")
         self.assertEqual(doc["spec"], f"specs/{SPEC_ID}")
+
+
+class StatusIsNotContentTest(IntentRepoTestCase):
+    """The status lives in the intent's frontmatter and moves on its own; the request didn't change."""
+
+    def set_status(self, status: str) -> None:
+        text = self.intent.read_text()
+        self.assertTrue(text.startswith("---\nstatus: draft"), text[:40])
+        self.intent.write_text(text.replace("status: draft", f"status: {status}", 1))
+
+    def recorded(self) -> str:
+        return parse_spec(self.spec_dir / "spec.md").frontmatter["intent"]["content_sha256"]
+
+    def test_new_records_a_v2_hash(self):
+        self.assertTrue(self.recorded().startswith("sha256v2:"), self.recorded())
+
+    def test_a_status_change_is_not_an_intent_change(self):
+        self.set_status("ready-for-code")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("unchanged", result.stdout)
+        self.assertEqual(self.specs("lint", str(self.spec_dir)).returncode, 0)
+
+    def test_a_body_change_still_is(self):
+        self.set_status("ready-for-code")
+        self.edit_intent("## Constraints\n", "## Constraints\nNo new PII.\n")
+        self.assertEqual(self.check().returncode, 1)
+
+    def test_a_v1_record_ignores_a_frontmatter_added_later(self):
+        # Specs recorded before the status existed hold a bare hash of an intent with no
+        # frontmatter. Adding one, then moving the status on, must not read as a change.
+        old_intent = self.intent.read_text().split("---\n", 2)[2]
+        spec = self.spec_dir / "spec.md"
+        spec.write_text(spec.read_text().replace(self.recorded(), intent_sha256(old_intent)))
+        self.assertEqual(self.check().returncode, 0)
+        self.set_status("done")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.specs("lint", str(self.spec_dir)).returncode, 0)
+        self.edit_intent("## Constraints\n", "## Constraints\nNo new PII.\n")
+        self.assertEqual(self.check().returncode, 1)
+        self.assertEqual(self.specs("intent", "record", str(self.spec_dir)).returncode, 0)
+        self.assertTrue(self.recorded().startswith("sha256v2:"))
+
+    def test_diff_finds_a_v1_recorded_version(self):
+        spec = self.spec_dir / "spec.md"
+        spec.write_text(spec.read_text().replace(self.recorded(), intent_sha256(self.intent.read_text())))
+        self.commit("v1 record")
+        self.edit_intent("## Constraints\n", "## Constraints\nNo new PII.\n")
+        result = self.check("--diff")
+        self.assertIn("+No new PII.", result.stdout)
+
+    def test_diff_ignores_a_status_change_in_history(self):
+        self.set_status("ready-for-spec")
+        self.commit("status")
+        self.edit_intent("## Constraints\n", "## Constraints\nNo new PII.\n")
+        result = self.check("--diff")
+        self.assertIn("+No new PII.", result.stdout)
+        # The newest committed version with the recorded hash is the status commit: the diff is
+        # the edit alone, not the status change before it.
+        changed = [ln for ln in result.stdout.splitlines() if ln[:1] in "+-" and ln[:3] not in ("+++", "---")]
+        self.assertEqual(changed, ["+No new PII."])
 
 
 class RecordTest(IntentRepoTestCase):

@@ -1,5 +1,8 @@
+---
+status: draft   # draft | ready-for-spec | ready-for-code | done | dropped
+---
 # Intent: Webhook retries
-Author: jdoe. Status: draft.
+Author: jdoe.
 
 ## Problem
 The current situation and what hurts, in the words of whoever has the problem.

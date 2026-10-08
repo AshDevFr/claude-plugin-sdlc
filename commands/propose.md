@@ -28,6 +28,11 @@ engineer runs those, and the output ends with the commands to do so.
 - **Exit 2**: say readiness couldn't be checked, show the message, and don't call the spec
   ready. If there's no spec for the branch, ask for the directory and stop.
 
+**Dependencies are separate.** If the spec's `blocked_by` isn't empty, name each spec in it with
+its status, as information: it doesn't affect readiness, since a spec can be reviewed whatever
+state its dependencies are in. It only says the spec can't be built until they're `done`, so
+mention it in "What to review".
+
 **Whatever the result, carry on to Steps 2 and 3.** Readiness is advice: the engineer may
 want reviewers to see a spec with open questions on purpose. Say which reasons they'll want
 to resolve first, and suggest `/sdlc:analyze` for a deeper read if they haven't run it.

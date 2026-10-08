@@ -21,7 +21,7 @@ from .errors import CheckFailed, UsageError
 from .frontmatter import scalar, set_top_level
 from .keys import Keys, slugify
 from .output import Output
-from .snapshot import intent_sha256
+from .snapshot import intent_hash
 from .spec import SpecParseError, parse_spec_text
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
@@ -66,6 +66,7 @@ def render_frontmatter(
     intent: dict[str, str] | None = None,
     ticket: dict[str, str] | None = None,
     supersedes: list[str] = (),
+    depends_on: list[str] = (),
 ) -> str:
     """Frontmatter in a fixed key order, written as text so every spec reads the same."""
     lines = ["---", f"id: {scalar(spec_id)}", f"title: {scalar(title)}"]
@@ -84,6 +85,10 @@ def render_frontmatter(
         "state: active",
         "supersedes: [" + ", ".join(scalar(s) for s in supersedes) + "]",
         "superseded_by: null",
+    ]
+    if depends_on:
+        lines.append("depends_on: [" + ", ".join(scalar(d) for d in depends_on) + "]")
+    lines += [
         "---",
         "",
         "",
@@ -139,6 +144,21 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--intent-file", metavar="PATH", help="intent specs: copy this file as intent.md")
     parser.add_argument("--key", help="ticket specs: #123, group/project#123 or ENG-123")
     parser.add_argument("--supersedes", metavar="ID", help="id of the spec this one replaces")
+    parser.add_argument(
+        "--depends-on", metavar="ID[,ID]", help="ids of specs that must be implemented before this one"
+    )
+
+
+def _dependencies(specs: Path, raw: str | None, spec_id: str) -> list[str]:
+    """The `--depends-on` ids, each naming an existing spec directory, checked before anything is
+    written: a spec created with a dangling dependency would only fail lint later."""
+    ids = [part.strip() for part in (raw or "").split(",") if part.strip()]
+    for dep in ids:
+        if dep == spec_id:
+            raise CheckFailed(f"--depends-on {dep}: a spec can't depend on itself")
+        if "/" in dep or dep in (".", "..", "templates") or not (specs / dep).is_dir():
+            raise CheckFailed(f"--depends-on {dep}: no spec directory {dep} in {specs.name}/")
+    return ids
 
 
 def _write(target: Path, files: dict[str, bytes], old_edit: tuple[Path, str] | None) -> None:
@@ -208,7 +228,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         intent_label = f"[{INTENT_FILE}]({INTENT_FILE})"
         intent_block = {
             "file": INTENT_FILE,
-            "content_sha256": intent_sha256(intent_bytes.decode("utf-8")),
+            "content_sha256": intent_hash(intent_bytes.decode("utf-8")),
             "recorded_at": _now().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "recorded_by": author,
         }
@@ -218,6 +238,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
     target = specs / spec_id
     if target.exists() and not (ticket is None and intent_only(target)):
         raise CheckFailed(f"{target.relative_to(root).as_posix()} already exists; pick another --slug")
+    depends_on = _dependencies(specs, args.depends_on, spec_id)
     old_edit = (
         _superseding_edit(specs / args.supersedes, args.supersedes, spec_id) if args.supersedes else None
     )
@@ -227,6 +248,7 @@ def run(args: argparse.Namespace, out: Output) -> cli.Result:
         intent=intent_block,
         ticket=ticket,
         supersedes=[args.supersedes] if args.supersedes else [],
+        depends_on=depends_on,
     ) + render_body(template_text(config, root, "spec.md"), args.title, intent_label, today, author)
     if target.exists():  # an intent written ahead of its spec: add the spec beside it
         _write_beside(target, text.encode("utf-8"), old_edit)

@@ -55,7 +55,10 @@ citation, `<id>:AC-n`, so shorter is better) and let the engineer change it.
 "${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" intent assess --file <intent file>
 ```
 
-It reports each template section as `missing`, `empty`, `template` or `ok`. Add the judgement
+It reports each template section as `missing`, `empty`, `template` or `ok`, and the intent's
+`status` from its frontmatter (`draft` when it has none). Mention a `draft` status in passing,
+since its author may still be writing it, and an `invalid` one with the helper's reason; neither
+stops the spec, and the status is the author's to change, not yours. Add the judgement
 it can't make, as the `sdlc:intent-writing` skill describes: an outcome nobody could check,
 unclear scope, a solution written as the problem, missing constraints the domain obviously has.
 
@@ -77,11 +80,22 @@ branch is the default branch (`main`, `master`, or what `origin/HEAD` points to)
 and switch to a branch named after the id; on any other branch, stay.
 
 When the intent was pasted, show the text that will become `intent.md` (improved or not) and ask
-to confirm saving it. Then create the directory through the helper, which copies the intent and
-records its hash:
+to confirm saving it.
+
+Ask once whether this change depends on another spec: one that must be built before this one
+can be (it needs that code to exist), not one that's merely related. List the specs there are,
+with their status, so the engineer can pick by name:
 
 ```sh
-"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" new --title "<title>" --slug <slug> --intent-file <intent file> [--supersedes <spec-id>]
+"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" --json deps
+```
+
+Propose any the intent or the code makes obvious, and say why. "None" is a fine answer, and a
+dependency can be added to `depends_on` later. Then create the directory through the helper,
+which copies the intent, records its hash, and writes `depends_on`:
+
+```sh
+"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" new --title "<title>" --slug <slug> --intent-file <intent file> [--supersedes <spec-id>] [--depends-on <spec-id>,...]
 ```
 
 For an intent written ahead of its spec, pass its id's date and slug:
@@ -91,8 +105,10 @@ For an intent written ahead of its spec, pass its id's date and slug:
   with no `--intent-file`: the helper writes `spec.md` beside the existing `intent.md` and
   records its hash.
 
-If it exits 1, a spec with that id already exists: for a new request, propose another slug and
-try again; for an intent written ahead, stop and say which spec already has the id.
+If it exits 1 naming `--depends-on`, an id isn't a spec in this repository: show the message and
+ask again. Otherwise exit 1 means a spec with that id already exists: for a new request, propose
+another slug and try again; for an intent written ahead, stop and say which spec already has the
+id.
 
 When the intent was a file inside the repository but outside the specs directory (an
 `intents/` file included), it now exists twice. Offer to remove the original so the spec

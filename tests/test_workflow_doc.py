@@ -68,6 +68,17 @@ class WorkflowDocTest(unittest.TestCase):
         self.assertIn("`intent.md` is the original request", self.text)
         self.assertIn("Nothing gates on the quality of an intent", self.text)
 
+    def test_frontmatter_tables_give_status_and_depends_on_their_reasons(self):
+        # Sliced from the raw text: the 3.2 example holds `## ` headings inside a code fence.
+        frontmatter = self.text[self.text.index("### 3.1") : self.text.index("### 3.2")]
+        self.assertIn("| `depends_on` |", frontmatter)
+        intent = self.text[self.text.index("### 3.3") : self.text.index("## 4.")]
+        self.assertIn("| `status` |", intent)
+        for status in ("draft", "ready-for-spec", "ready-for-code", "done", "dropped"):
+            self.assertIn(f"`{status}`", intent)
+        self.assertIn("sha256v2:", self.text)
+        self.assertIn("no code host or tracker knows", " ".join(intent.split()))
+
     def test_section_numbers_are_stable(self):
         numbers = [h.split(".", 1)[0] for h in self.sections if re.match(r"\d+\.", h)]
         self.assertEqual(numbers, [str(n) for n in range(1, 13)])

@@ -41,6 +41,23 @@ specs/
 - A change earns a spec when it is substantial: new behaviour, a contract others depend on, a
   risky migration. Small fixes don't need one. That call is a team convention, not a check.
 
+## Status and dependencies
+
+An intent kept as a file carries its own status in its frontmatter (`draft`, `ready-for-spec`,
+`ready-for-code`, `done`, `dropped`): no tracker knows where a file intent stands, so the file
+says. A person sets it; the plugin only ever writes `draft`, on creation. A ticket spec's status
+stays in its tracker.
+
+A spec's `depends_on` names the specs that must be built first. A spec is **ready to implement**
+when every spec it depends on is `done`; its own status doesn't count. A dependency that is a ticket spec shows `unknown (tracker)`: someone confirms it in the tracker, or, in an unattended run, the code is checked instead. The session status
+line shows the status and `blocked by <id>`; `/sdlc:plan` and `/sdlc:implement` warn before
+starting a spec that isn't ready, and `/sdlc:propose` lists unmet dependencies. All of it is
+advice: nothing is refused. The whole graph, in order:
+
+```sh
+"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" deps
+```
+
 ## Which command when
 
 | Situation | Command |

@@ -1,5 +1,8 @@
+---
+status: draft   # draft | ready-for-spec | ready-for-code | done | dropped
+---
 # Intent: $title
-Author: $author. Status: draft.
+Author: $author.
 
 ## Problem
 The current situation and what hurts, in the words of whoever has the problem.

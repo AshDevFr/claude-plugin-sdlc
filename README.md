@@ -84,7 +84,7 @@ its revision.
 | Path | What |
 |---|---|
 | `.claude-plugin/` | Plugin manifest and marketplace |
-| `tools/specs/` | The helper: parsing, lint, hashing, `new`, `intent`, `coverage`, `status`, `check`, `trailers` (see its README) |
+| `tools/specs/` | The helper: parsing, lint, hashing, `new`, `intent`, `coverage`, `status`, `check`, `deps`, `trailers` (see its README) |
 | `docs/workflow.md` | The workflow, as guidance and best practices |
 | `docs/adoption.md` | Adopting the plugin: install, a first change, and how to tell whether it's working |
 | `bin/sdlc-sandbox`, `sandbox/` | Disposable repositories in scripted states, for trying the commands |

@@ -139,7 +139,7 @@ id: 2026-09-23-webhook-retries
 title: Webhook retries
 intent:
   file: intent.md
-  content_sha256: 4f1c...            # hash of intent.md when the spec was written
+  content_sha256: sha256v2:4f1c...   # hash of intent.md, frontmatter left out, when the spec was written
   recorded_at: 2026-09-23T11:02:00Z
   recorded_by: jdoe
 revision: 2                          # bumped on every content change after first review
@@ -147,6 +147,8 @@ state: active                        # active | superseded
 supersedes: []                       # e.g. [2026-05-02-webhook-delivery]
 superseded_by: null                  # set when a later spec replaces this one
 related: []
+depends_on:                          # specs that must be implemented before this one
+  - 2026-09-20-delivery-log
 attachments:
   - threat-model.md
 ---
@@ -159,9 +161,18 @@ attachments:
 | `revision` | Lets people say "spec r3" in reviews and trailers | The engineer, through `/sdlc:sync` |
 | `state` | The one lifecycle the code host can't express: superseded | `specs new --supersedes` |
 | `supersedes` / `superseded_by` | The chain between a spec and its replacement | `specs new --supersedes` |
+| `related` | Links to other specs or tickets worth reading; no order implied | The engineer |
+| `depends_on` | Spec ids in this repository that must be implemented first; `/sdlc:start` asks for them. Unlike `related` it is a gate, as advice: the spec is **ready to implement** when every spec named here has an intent that is `done`. The spec's own status doesn't count |  `specs new --depends-on`, or the engineer |
 
-Deliberately **absent**: `status: approved`, `approvers`, `pr`. The code host knows those;
-a copy would drift.
+Deliberately **absent**: `status`, `approved`, `approvers`, `pr`. The code host knows approval
+and PR state; a copy would drift. Where the request stands is the intent's, not the spec's: it
+lives in `intent.md`'s frontmatter (3.3), or in the tracker for a spec written from a ticket.
+
+`depends_on` only says whether the spec can be worked on yet, never whether the spec is ready
+for review. Lint checks `depends_on`: each id names a spec directory in the repository (`L018`), a spec
+doesn't depend on itself (`L019`), and no cycle runs through the repository's specs (`L020`). A
+dependency that is a ticket spec has no status the plugin can read: it shows as
+`unknown (tracker)` and never counts as done.
 
 ### 3.2 Body template
 
@@ -214,8 +225,11 @@ The intent is written by whoever has the problem, often with Claude's help, in t
 words. The template follows the playbook:
 
 ```markdown
+---
+status: ready-for-spec   # draft | ready-for-spec | ready-for-code | done | dropped
+---
 # Intent: claims status self-service
-Author: J. Ortiz (claims operations). Status: draft.
+Author: J. Ortiz (claims operations).
 ## Problem
 Customers phone the contact center to ask where their claim is.
 Handlers spend roughly a third of call time on status-only queries.
@@ -229,13 +243,27 @@ No new PII in the portal session. Existing authentication only.
 Do third-party loss adjusters need access too?
 ```
 
+The frontmatter holds one field:
+
+| Field | Why it exists | Written by |
+|---|---|---|
+| `status` | Where the request stands: `draft` (still being written), `ready-for-spec` (a spec can be written), `ready-for-code` (the spec is approved; it can be built once its dependencies are `done`), `done` (implemented and merged), `dropped` (not doing it). Missing means `draft` | A person, every time; the plugin writes `draft` when it creates an intent and never changes it after |
+
+**Why the status is in the file.** "Don't store in files what the code host already knows"
+still holds: no code host or tracker knows this state. For a team that keeps intents as files,
+with no ticket behind them, the intent *is* the ticket, so its status belongs in it. A spec
+written from a Linear, GitLab or GitHub ticket is different: the ticket already carries a
+status, and copying it into a file would drift, so ticket specs keep taking their status from
+the tracker, which the plugin doesn't read.
+
 `/sdlc:start` assesses an intent against these sections and lists its gaps: a missing problem
 statement, an outcome nobody could check, a solution written as the problem. It then offers to
 improve the intent together, or to proceed as it is. Both are fine: a thin intent produces a
 spec with more open questions, which `/sdlc:clarify` works down.
 
-The spec records a hash of `intent.md`. When the intent is edited later, `/sdlc:check` says so
-and `/sdlc:sync` shows the change (section 5.1).
+The spec records a hash of `intent.md`, frontmatter left out, so moving the status on is never
+reported as a change to the request. When the intent itself is edited later, `/sdlc:check` says
+so and `/sdlc:sync` shows the change (section 5.1).
 
 ---
 
@@ -273,11 +301,14 @@ flowchart TD
    commit, push and open the PR.
 5. **Spec review through code owners.** Reviewers read the rendered markdown in the PR and
    comment inline; product people review in the code host's web UI.
-6. **After the spec is approved, write code.** `/sdlc:plan` writes `plan.local.md`;
-   `/sdlc:implement` works from the approved spec. Commits and tests cite `AC-n`.
+6. **After the spec is approved, write code.** The intent's author moves its `status` to
+   `ready-for-code`. `/sdlc:plan` writes `plan.local.md`; `/sdlc:implement` works from the
+   approved spec. Both warn first when the spec isn't ready to implement, because a spec in its
+   `depends_on` isn't `done`. Commits and tests cite `AC-n`.
 7. **`/sdlc:converge`** before marking the PR ready: every criterion has evidence, and every
    changed file serves some criterion.
-8. **Mark ready, review, merge.** The spec on the default branch is now the frozen record.
+8. **Mark ready, review, merge.** The spec on the default branch is now the frozen record. Set
+   the intent's `status` to `done`: that is what unblocks the specs that depend on it.
 
 Run `/sdlc:check` before committing spec changes: it runs the plugin's lint, reports criteria
 no test cites yet, and says whether the intent changed. Its findings are advice.
@@ -321,9 +352,13 @@ Two directions of drift:
 
 ### 5.1 Upstream: the intent changed
 
-The spec records `sha256` of `intent.md`, normalised (line endings unified, trailing whitespace
-and blank edges trimmed, nothing else touched). The plugin compares it with the file as it is
-now:
+The spec records `sha256` of `intent.md` without its frontmatter, normalised (line endings
+unified, trailing whitespace and blank edges trimmed, nothing else touched), as
+`sha256v2:<hex>`. The frontmatter is left out because it holds the intent's `status`, which
+changes as work moves without the request changing. Specs recorded before this hold a bare hex
+hash, taken when intents had no frontmatter; it still matches once a frontmatter is added or its
+status changes, and `/sdlc:sync` records the new form the next time the request itself changes.
+The plugin compares the record with the file as it is now:
 
 - `/sdlc:check` and the session status line report `intent changed`.
 - `/sdlc:sync` shows what changed since the spec recorded it (from git history) and walks the
@@ -527,7 +562,8 @@ Two, both advisory, silent outside a repository with `specs/config.yml`, never b
 network:
 
 - **Session start**: one status line for the branch's spec (id, revision, lint findings,
-  whether the intent changed, and `handoff waiting` when `/sdlc:handoff` left one).
+  whether the intent changed, the intent's status, `blocked by <id>` when a dependency isn't
+  done, and `handoff waiting` when `/sdlc:handoff` left one).
 - **After Claude edits a `spec.md`**: when the body changed since the pushed version (what
   reviewers can see) and `revision` wasn't bumped, one reminder to bump it and add a
   `## Revisions` entry. Nothing when the spec isn't pushed yet.
@@ -535,8 +571,8 @@ network:
 ### 9.4 The helper
 
 `tools/specs/specs` ships inside the plugin and runs from there; nothing is copied into product
-repositories. Its subcommands: `init`, `new`, `lint`, `intent check|record|assess`, `coverage`,
-`status`, `check`, `trailers`. It needs Python 3.10+ and PyYAML, makes no network calls, and exits 0 (nothing to
+repositories. Its subcommands: `init`, `new`, `lint`, `intent check|record|assess|new`, `coverage`,
+`status`, `check`, `deps`, `trailers`. It needs Python 3.10+ and PyYAML, makes no network calls, and exits 0 (nothing to
 report), 1 (findings) or 2 (usage or configuration problem, one line saying which).
 
 ---

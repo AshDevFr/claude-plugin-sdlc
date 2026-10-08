@@ -84,7 +84,7 @@ class AssessTest(AssessTestCase):
 
     def test_json_shape(self):
         doc = self.assess_text((FIXTURES / "claims-status.md").read_text())
-        self.assertEqual(set(doc), {"ok", "sections", "open_questions"})
+        self.assertEqual(set(doc), {"ok", "status", "status_problem", "sections", "open_questions"})
         for entry in doc["sections"]:
             self.assertEqual(set(entry), {"section", "state"})
             self.assertIn(entry["state"], {"missing", "empty", "template", "ok"})
@@ -119,6 +119,32 @@ class AssessTest(AssessTestCase):
         for body, expected in cases.items():
             with self.subTest(body=body):
                 self.assertEqual(self.assess_text(base.format(body))["open_questions"], expected)
+
+    def test_status_is_reported_and_an_old_intent_is_a_draft(self):
+        doc = self.assess_text((FIXTURES / "claims-status.md").read_text())
+        self.assertEqual((doc["status"], doc["status_problem"]), ("draft", None))
+        text = "---\nstatus: ready-for-code\n---\n" + (FIXTURES / "claims-status.md").read_text()
+        self.assertEqual(self.assess_text(text)["status"], "ready-for-code")
+
+    def test_an_invalid_status_is_reported(self):
+        text = "---\nstatus: approved\n---\n" + (FIXTURES / "claims-status.md").read_text()
+        path = self.root / "request.md"
+        path.write_text(text)
+        result = self.specs("intent", "assess", "--file", str(path))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Status: invalid ('approved' is not one of", result.stdout)
+        doc = self.assess_text(text)
+        self.assertEqual(doc["status"], "invalid")
+        self.assertIn("approved", doc["status_problem"])
+
+    def test_the_frontmatter_is_not_read_as_sections(self):
+        # A YAML comment line looks like an H1; it must not pass for the intent's title.
+        text = (
+            (FIXTURES / "claims-status.md").read_text().replace("# Intent: claims status self-service\n", "")
+        )
+        doc = self.assess_text("---\n# set by the PM\nstatus: draft\n---\n" + text)
+        self.assertEqual(self.states(doc)["Title"], "missing")
+        self.assertEqual({self.states(doc)[s] for s in TEMPLATE_SECTIONS}, {"ok"})
 
     def test_missing_file_is_a_usage_error(self):
         self.assertEqual(self.specs("intent", "assess", "--file", "nope.md").returncode, 2)

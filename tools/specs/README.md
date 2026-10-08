@@ -85,10 +85,14 @@ The local check before committing: per spec, lint findings, criteria no test cit
 intent state (`unchanged`, `changed`, `not recorded`, `n/a` for a ticket spec). Without a
 directory, the current branch's spec. Exits 1 when there is anything to report.
 
+Each spec's report also carries its intent's `status` (see `deps`), the specs in its
+`depends_on` that aren't `done` (`blocked_by`, each with its status), and `ready_to_implement`.
+Unmet dependencies are information: they never change the exit code or readiness.
+
 With `--ready`, it also says whether each spec is ready for review, with reasons: open
 questions, template text left in a section, other lint findings, the intent changed or not
-recorded. Uncited criteria don't count against readiness: spec review comes before code. It
-exits 0 only when every spec is ready.
+recorded. Uncited criteria and unmet dependencies don't count against readiness: spec review
+comes before code, and a spec can be reviewed whatever its dependencies' state. It exits 0 only when every spec is ready.
 
 ### `init`
 
@@ -127,7 +131,7 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 | Rule | Checks |
 |---|---|
 | `L001` | `spec.md` exists and its frontmatter parses |
-| `L002` | Required frontmatter fields and types; no unknown fields; no `approved`, `approvers`, `pr` or `status` |
+| `L002` | Required frontmatter fields and types (`depends_on` a list of strings, `intent.content_sha256` bare hex or `sha256v2:` hex); no unknown fields; no `approved`, `approvers`, `pr` or `status` |
 | `L003` | `id` equals the directory name; a spec with an intent file has a `YYYY-MM-DD-<slug>` id with a real date, even with a ticket linked; a ticket-only spec's directory starts with the `ticket.ref` prefix, and a ref whose project can't be resolved (no `tracker.project`, no `origin`) is reported here |
 | `L004` | Ticket specs: `ticket.system` matches the configured tracker |
 | `L005` | All template sections present, in any order |
@@ -143,6 +147,9 @@ directory. Findings print as `path:line: RULE message` on stdout; exit 1 if ther
 | `L015` | The file named by `intent.file` exists in the spec directory |
 | `L016` | The intent file hasn't changed since the spec recorded its hash (otherwise: `/sdlc:sync`) |
 | `L017` | With `--ready`: no section still holds the template's guidance text (the team's template when it has one) |
+| `L018` | Every `depends_on` entry names a spec directory in this repository (one holding only an intent counts) |
+| `L019` | A spec doesn't list itself in `depends_on` |
+| `L020` | No `depends_on` cycle across the repository's specs; reported on every spec on the cycle |
 
 JSON output:
 
@@ -155,8 +162,8 @@ JSON output:
 ### `new`
 
 ```sh
-tools/specs/specs new --title <title> [--slug <slug>] [--date YYYY-MM-DD] [--intent-file <path>] [--supersedes <id>]
-tools/specs/specs new --key <ticket> --title <title> [--slug <slug>] [--supersedes <id>]
+tools/specs/specs new --title <title> [--slug <slug>] [--date YYYY-MM-DD] [--intent-file <path>] [--supersedes <id>] [--depends-on <id>[,<id>]]
+tools/specs/specs new --key <ticket> --title <title> [--slug <slug>] [--supersedes <id>] [--depends-on <id>[,<id>]]
 ```
 
 Creates a spec directory. Exits 1 without writing anything when the directory already exists.
@@ -169,10 +176,18 @@ Creates a spec directory. Exits 1 without writing anything when the directory al
   ```yaml
   intent:
     file: intent.md
-    content_sha256: 4f1c...          # sha256 of the normalised intent file
+    content_sha256: sha256v2:4f1c... # sha256 of the normalised intent, frontmatter left out
     recorded_at: 2026-09-23T11:02:00Z
     recorded_by: jdoe
   ```
+
+  **The intent hash.** v2, written by `new` and `intent record`, is `sha256v2:` and the sha256 of
+  the normalised intent without its leading frontmatter block, so changing the intent's
+  `status` doesn't read as a change. v1, a bare hex sha256 of the whole normalised file, is what
+  specs recorded before; it is never written now, but a v1 record is still compared with v1,
+  so committed specs keep working. Since those records were taken before intents had a
+  frontmatter, a v1 record also matches the intent with its frontmatter left out: adding one,
+  or changing the status in it, isn't a change. Both algorithms are frozen (`sdlc_specs/snapshot.py`).
 
 - **Ticket spec** (`--key`): named after the ticket; `lint` reports only `L010` until a ticket
   snapshot is taken.
@@ -180,6 +195,10 @@ Creates a spec directory. Exits 1 without writing anything when the directory al
 Templates come from `<specs_dir>/templates/spec.md` and `intent.md` when a team has them,
 else from the helper's own. The spec template is the body only; `new` writes the frontmatter
 itself. Placeholders: `$title`, `$intent`, `$date`, `$author`.
+
+With `--depends-on <id>[,<id>]`, the new spec lists those ids under `depends_on`. Each must be
+an existing spec directory other than the new spec's own; otherwise it exits 1 and writes
+nothing.
 
 With `--supersedes <id>`, the new spec lists `<id>` under `supersedes`, and the old spec gets
 `state: superseded` and `superseded_by: <new id>`, edited in place so the rest of the file is
@@ -207,17 +226,24 @@ are included. If no committed version matches, it says so instead of guessing a 
 when), rewriting only that block, and adds the block after `title` if the spec has none. It is
 what `/sdlc:sync` runs once the spec has been reviewed against the change.
 
-`assess` reports each intent template section as `missing`, `empty`, `template` (still the
+`assess` reports the intent's `status` from its frontmatter (`invalid`, with the reason, for a
+value other than `draft`, `ready-for-spec`, `ready-for-code`, `done`, `dropped`; `draft` when
+there is none), each intent template section as `missing`, `empty`, `template` (still the
 template's guidance) or `ok`, plus the title and Author line, and lists the open questions
-(list items, or one per paragraph when there are none). The sections come from the team's
+(list items, or one per paragraph when there are none). The frontmatter is never read as
+sections. The sections come from the team's
 `specs/templates/intent.md` when it has one. It always exits 0: gaps are for the plugin to
 offer help with, never a failure.
 
 `new` starts an intent before its spec, the file `/sdlc:intent` then fills in. Its id is
 `YYYY-MM-DD-<slug>` (local date, as `new`). With an `intents/` directory at the repository root it
 writes `intents/<id>.md`; otherwise a spec directory holding only the intent,
-`<specs_dir>/<id>/intent.md`. Both start from the intent template in use; an id already taken
-exits 1.
+`<specs_dir>/<id>/intent.md`. Both start from the intent template in use, which marks the intent
+`status: draft`; an id already taken exits 1.
+
+**Intent status.** An intent file's frontmatter may hold `status`: `draft`, `ready-for-spec`,
+`ready-for-code`, `done` or `dropped`. A person sets it; the helper only reads it, and the
+templates start it at `draft`. No frontmatter or no `status` means `draft`.
 
 **Intent only.** A spec directory with `intent.md` and no `spec.md` is an intent waiting for its
 spec: `lint` has nothing to report for it, `check --all` and `coverage` skip it, and `status` on
@@ -242,12 +268,29 @@ stays within one. Citations of a struck or nonexistent criterion are listed sepa
 tools/specs/specs status
 ```
 
-One line for the current branch's spec: `<id> r<revision>: <n> lint finding(s), intent <state>`
-(`n/a` for a ticket spec), or `no spec for this branch`, or `no branch` on a detached HEAD.
+One line for the current branch's spec:
+`<id> r<revision>: <n> lint finding(s), intent <state>, status <status>[, blocked by <id>, ...]`
+(intent `n/a` and no status for a ticket spec), `<id>: intent only, no spec yet, status
+<status>`, or `no spec for this branch`, or `no branch` on a detached HEAD.
 The spec is the one whose id appears in the branch name (the longest when several do), else
 the spec of the ticket the branch names. Always exits 0; fast enough for a status line.
 `, handoff waiting` is appended when `/sdlc:handoff` left a `handoff.local.md` in the spec's
 directory (in `<specs_dir>/` for a branch without a spec).
+
+### `deps`
+
+```sh
+tools/specs/specs deps
+```
+
+Every spec directory, each after the specs in its `depends_on`, with its intent's status and a
+verdict: `done` or `dropped` (its own status), else `blocked` (a dependency isn't `done`, named
+with its status) or `ready` (every dependency is `done`). The spec's own status never decides
+`ready`. A ticket spec's status is `unknown (tracker)`: as a dependency it never counts as done. Specs on a cycle (lint `L020`) are listed last and named. Read-only; always exits
+0.
+
+JSON output: `{"ok": true, "specs": [{"spec", "status", "verdict", "depends_on": [...],
+"blocked_by": [{"spec", "status"}]}], "cycles": [...]}`.
 
 ### `trailers`
 

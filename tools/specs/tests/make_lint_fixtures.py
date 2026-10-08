@@ -19,7 +19,7 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL))
 from sdlc_specs.new import TEMPLATES, render_body, render_frontmatter  # noqa: E402
-from sdlc_specs.snapshot import intent_sha256  # noqa: E402
+from sdlc_specs.snapshot import intent_hash  # noqa: E402
 
 FIXTURES = TOOL / "tests" / "fixtures"
 EXAMPLE = FIXTURES / "specs/123-prorate-plan-changes"
@@ -216,7 +216,7 @@ INTENT_SPEC = render_frontmatter(
     "Webhook retries",
     intent={
         "file": "intent.md",
-        "content_sha256": intent_sha256(INTENT_TEXT),
+        "content_sha256": intent_hash(INTENT_TEXT),
         "recorded_at": "2026-09-23T11:02:00Z",
         "recorded_by": "jdoe",
     },
@@ -238,12 +238,17 @@ INTENT_SPEC = fill_sections(
 )
 
 
-def intent_fixture(fixture_name, spec, *, rule=None, needle=None, line=None, intent=INTENT_TEXT):
+def intent_fixture(fixture_name, spec, *, rule=None, needle=None, line=None, intent=INTENT_TEXT, others=None):
     target = OUT / fixture_name / "head" / INTENT_NAME
     target.mkdir(parents=True)
     (target / "spec.md").write_text(spec)
     if intent is not None:
         (target / "intent.md").write_text(intent)
+    for name, other_spec in (others or {}).items():
+        other = OUT / fixture_name / "head" / name
+        other.mkdir(parents=True)
+        (other / "spec.md").write_text(other_spec)
+        (other / "intent.md").write_text(INTENT_TEXT)
     if rule:
         if line is None:
             line = line_of(spec, needle)
@@ -272,5 +277,35 @@ intent_fixture("L016-fail", INTENT_SPEC, intent=edited_intent, rule="L016", need
 intent_fixture("L017-pass", INTENT_SPEC)
 guidance_left = fill_sections(INTENT_SPEC, {"## Design\n": DESIGN_GUIDANCE})
 intent_fixture("L017-fail", guidance_left, rule="L017", needle="## Design")
+
+
+def depends_on(spec: str, *ids: str) -> str:
+    return replace(
+        spec, "superseded_by: null\n", "superseded_by: null\ndepends_on: [" + ", ".join(ids) + "]\n"
+    )
+
+
+# Another intent spec in the same repository, for the dependency rules.
+LOG_NAME = "2026-09-20-delivery-log"
+LOG_SPEC = replace(INTENT_SPEC, f"id: {INTENT_NAME}", f"id: {LOG_NAME}")
+
+# L018: a dependency names a spec directory in the repository
+intent_fixture("L018-pass", depends_on(INTENT_SPEC, LOG_NAME), others={LOG_NAME: LOG_SPEC})
+missing = depends_on(INTENT_SPEC, "2026-09-20-delivery-lag")
+intent_fixture("L018-fail", missing, others={LOG_NAME: LOG_SPEC}, rule="L018", needle="depends_on:")
+
+# L019: a spec doesn't depend on itself
+intent_fixture("L019-pass", depends_on(INTENT_SPEC, LOG_NAME), others={LOG_NAME: LOG_SPEC})
+intent_fixture("L019-fail", depends_on(INTENT_SPEC, INTENT_NAME), rule="L019", needle="depends_on:")
+
+# L020: no cycle across the repository's specs (each spec on the cycle reports it)
+intent_fixture("L020-pass", depends_on(INTENT_SPEC, LOG_NAME), others={LOG_NAME: LOG_SPEC})
+intent_fixture(
+    "L020-fail",
+    depends_on(INTENT_SPEC, LOG_NAME),
+    others={LOG_NAME: depends_on(LOG_SPEC, INTENT_NAME)},
+    rule="L020",
+    needle="depends_on:",
+)
 
 print("\n".join(sorted(p.name for p in OUT.iterdir())))

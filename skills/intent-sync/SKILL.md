@@ -13,9 +13,16 @@ either way: show the change, decide its impact, record the decision in the spec.
 ## What the hash records
 
 When a spec is written, the helper stores `intent.md`'s SHA-256 in the spec's frontmatter
-(`intent.content_sha256`). The hash is of the normalised text: line endings unified, trailing
-whitespace and leading or trailing blank lines dropped. Nothing else is forgiven, so a
-reworded line counts as a change even if its meaning didn't move.
+(`intent.content_sha256`), as `sha256v2:<hex>`. The hash is of the normalised text without the
+intent's frontmatter: line endings unified, trailing whitespace and leading or trailing blank
+lines dropped. Nothing else is forgiven, so a reworded line counts as a change even if its
+meaning didn't move.
+
+The frontmatter is left out because it holds the intent's `status`, which people move on as the
+work goes; a status change isn't a change to the request, and must not send anyone here.
+Specs recorded before that hold a bare hex hash, taken when intents had no frontmatter. It still
+matches when a frontmatter is added later or its status changes; only an edit to the request
+itself reads as `changed`. Recording again writes the `sha256v2:` form like any new record.
 
 - `"${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" intent check <spec-dir>` says `unchanged`,
   `changed` or `not recorded`; `--diff` shows what changed since the recorded version (found in

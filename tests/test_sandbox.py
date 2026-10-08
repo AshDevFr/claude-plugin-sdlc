@@ -22,6 +22,8 @@ NAMES = (
     "merged-spec-intent-change",
     "converge-partial",
     "implement-contradiction",
+    "intent-status-change",
+    "blocked-spec",
 )
 ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
@@ -84,6 +86,12 @@ class ScenarioTest(SandboxTestCase):
                     criteria = coverage["specs"][0]["criteria"]
                     uncited = [c["ac"] for c in criteria if c["state"] == "uncited"]
                     self.assertEqual(uncited, expected["uncited"])
+                if "status" in expected or "blocked_by" in expected:
+                    report = json.loads(self.helper("--json", "check", f"specs/{spec}").stdout)["specs"][0]
+                    self.assertEqual(report["status"], expected["status"])
+                    blocked = [b["spec"] for b in report["blocked_by"]]
+                    self.assertEqual(blocked, expected.get("blocked_by", []))
+                    self.assertEqual(report["ready_to_implement"], not blocked)
                 if "changed_files" in expected:
                     diff = self.git("diff", "--name-only", "main...HEAD").stdout.split()
                     self.assertEqual(sorted(diff), sorted(expected["changed_files"]))

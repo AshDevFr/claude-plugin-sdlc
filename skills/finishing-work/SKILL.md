@@ -28,6 +28,10 @@ Each finding, and what answers it:
 | **intent not recorded** | `specs intent record`, once the spec reflects the current intent |
 | **uncited** criteria | A test citing each one as `<spec-id>:AC-n`; a criterion nothing tests is a claim |
 
+The check also lists `blocked by` when a spec in `depends_on` isn't `done`. That isn't a
+readiness finding, but if the code relies on that spec, its PR has to merge first, or the PR
+says why this one can go first.
+
 A spec changed after reviewers approved it needs a revision entry, and on most code hosts a new
 approval: the PR description should say it changed.
 
@@ -65,7 +69,9 @@ never marks anything approved.
 ## At merge
 
 The spec on the default branch is now the frozen record of what shipped. Nothing more to do in
-it. A later change to the same behaviour starts from a new or updated intent and a new spec
+it. For an intent kept as a file, its author (or whoever the team agrees) sets the intent's
+`status` to `done`: that is what unblocks the specs that depend on this one, and nothing sets it
+automatically. A later change to the same behaviour starts from a new or updated intent and a new spec
 that supersedes this one (`/sdlc:start ... --supersedes <spec-id>`). Delete the branch.
 
 ## Or throw it away

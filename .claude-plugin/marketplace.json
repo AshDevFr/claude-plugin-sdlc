@@ -12,7 +12,7 @@
       "name": "sdlc",
       "source": "./",
       "description": "Spec-driven development for teams: intent, reviewed spec, plan, implementation. Advice, not enforcement.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "Sylvain Cau",
         "url": "https://github.com/AshDevFr"

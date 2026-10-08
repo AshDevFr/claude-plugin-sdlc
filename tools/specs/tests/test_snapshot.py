@@ -8,7 +8,10 @@ from sdlc_specs.snapshot import (
     apply_snapshot,
     apply_snapshot_text,
     content_sha256,
+    intent_hash,
+    intent_hash_matches,
     intent_sha256,
+    intent_sha256_v2,
     normalise,
     parse_snapshot_file,
     render_snapshot_file,
@@ -199,3 +202,50 @@ class IntentHashTest(OfflineTestCase):
 
     def test_whole_file_is_hashed(self):
         self.assertNotEqual(intent_sha256("# Intent: x\n\nA"), intent_sha256("# Intent: x\n\nB"))
+
+
+class IntentHashV2Test(OfflineTestCase):
+    """The intent hash that leaves the frontmatter out, so a status change isn't an intent change."""
+
+    WITH_STATUS = "\r\n---\r\nstatus: done  \r\n---\r\n\r\n# Intent: x  \r\n\r\nLine\t\r\n"
+
+    def test_pinned_v2_hash(self):
+        # The body is the pinned v1 example's text, so the same independent check holds:
+        # printf '# Intent: x\\n\\nLine' | sha256sum. Committed in product repos: never update it.
+        self.assertEqual(
+            intent_sha256_v2(self.WITH_STATUS),
+            "sha256v2:28ceecc90a8e69fc7e826cb28db2f46df53c4415d0aeb1284a710c97be6fe24d",
+        )
+
+    def test_only_the_frontmatter_is_left_out(self):
+        draft = "---\nstatus: draft\n---\n# Intent: x\n\nLine\n"
+        self.assertEqual(intent_sha256_v2(draft), intent_sha256_v2(draft.replace("draft", "ready-for-code")))
+        self.assertEqual(intent_sha256_v2(draft), intent_sha256_v2("# Intent: x\n\nLine\n"))
+        self.assertNotEqual(intent_sha256_v2(draft), intent_sha256_v2(draft.replace("Line", "Lines")))
+
+    def test_an_unterminated_frontmatter_is_body(self):
+        text = "---\nstatus: draft\n# Intent: x\n"
+        self.assertEqual(intent_sha256_v2(text), "sha256v2:" + intent_sha256(text))
+
+    def test_new_records_are_v2(self):
+        self.assertEqual(intent_hash(self.WITH_STATUS), intent_sha256_v2(self.WITH_STATUS))
+
+    def test_a_record_is_compared_with_its_own_algorithm(self):
+        v1, v2 = intent_sha256(self.WITH_STATUS), intent_sha256_v2(self.WITH_STATUS)
+        changed_status = self.WITH_STATUS.replace("done", "dropped")
+        self.assertTrue(intent_hash_matches(v1, self.WITH_STATUS))
+        self.assertTrue(intent_hash_matches(v2, self.WITH_STATUS))
+        # A bare (v1) record covers the whole file, frontmatter included; v2 doesn't.
+        self.assertFalse(intent_hash_matches(v1, changed_status))
+        self.assertTrue(intent_hash_matches(v2, changed_status))
+        self.assertEqual(intent_hash(changed_status, like=v1), intent_sha256(changed_status))
+        # The usual v1 case: recorded before intents had a frontmatter. Adding one, or moving the
+        # status in it, isn't a change to the request either.
+        old = "# Intent: x\n\nLine\n"
+        for later in ("---\nstatus: draft\n---\n" + old, "---\nstatus: done\n---\n" + old):
+            self.assertTrue(intent_hash_matches(intent_sha256(old), later))
+            self.assertEqual(intent_hash(later, like=intent_sha256(old)), intent_sha256(old))
+        self.assertFalse(intent_hash_matches(intent_sha256(old), "---\nstatus: done\n---\n# Intent: y\n"))
+        for junk in ("", "sha256v3:" + "a" * 64, "sha256v2:xyz", v1.upper()):
+            with self.subTest(recorded=junk):
+                self.assertFalse(intent_hash_matches(junk, self.WITH_STATUS))

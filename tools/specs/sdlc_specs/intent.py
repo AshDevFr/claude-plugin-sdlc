@@ -17,9 +17,10 @@ from . import cli
 from .branch import current_branch, spec_for_branch
 from .errors import EXIT_CHECK_FAILED, EXIT_OK, CheckFailed, UsageError
 from .frontmatter import scalar, set_top_level_block
+from .intent_status import IntentStatus, split_frontmatter, status_of_text
 from .new import INTENT_FILE, _author, _today, intent_spec_id, render_body, template_text
 from .output import Output
-from .snapshot import intent_sha256, normalise
+from .snapshot import intent_hash, intent_hash_matches, normalise
 from .spec import _LIST_ITEM, Section, SpecParseError, _items, _sections, parse_spec_text
 
 UNCHANGED = "unchanged"
@@ -58,8 +59,9 @@ def state_of(spec_dir: Path) -> IntentState:
     block = _intent_block(spec_dir, _spec_text(spec_dir))
     name = block.get("file") if isinstance(block.get("file"), str) else INTENT_FILE
     path = spec_dir / name
-    current = intent_sha256(path.read_text(encoding="utf-8")) if path.is_file() else None
     recorded = block.get("content_sha256") if isinstance(block.get("content_sha256"), str) else None
+    # Reported in the record's own algorithm, so the two values compare like with like.
+    current = intent_hash(path.read_text(encoding="utf-8"), like=recorded) if path.is_file() else None
     if recorded is None:
         return IntentState(NOT_RECORDED, path, None, current)
     return IntentState(UNCHANGED if recorded == current else CHANGED, path, recorded, current)
@@ -75,7 +77,7 @@ def recorded_version(root: Path, path: Path, recorded: str) -> tuple[str, str] |
     log = _git(root, "log", "--format=%H", "--", rel)
     for sha in log.stdout.split():
         shown = _git(root, "show", f"{sha}:{rel}")
-        if shown.returncode == 0 and intent_sha256(shown.stdout) == recorded:
+        if shown.returncode == 0 and intent_hash_matches(recorded, shown.stdout):
             return sha, shown.stdout
     return None
 
@@ -105,7 +107,7 @@ def record(spec_dir: Path, root: Path) -> str:
     path = spec_dir / name
     if not path.is_file():
         raise UsageError(f"{path.relative_to(root).as_posix()}: no intent file to record")
-    digest = intent_sha256(path.read_text(encoding="utf-8"))
+    digest = intent_hash(path.read_text(encoding="utf-8"))
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     children = [
         f"file: {scalar(name)}",
@@ -142,14 +144,16 @@ def _questions(section: Section | None, guidance: str) -> list[str]:
     return [q for q in items if q.lower() not in _NO_QUESTIONS and normalise(q) != guidance]
 
 
-def assess(text: str, template: str) -> tuple[list[tuple[str, str]], list[str]]:
-    """Per-section state (`missing`, `empty`, `template`, `ok`) against the template, and the
-    open questions. Judges presence only; what the content says is for a person to judge."""
-    template_lines = template.replace("\r\n", "\n").split("\n")
+def assess(text: str, template: str) -> tuple[list[tuple[str, str]], list[str], IntentStatus]:
+    """Per-section state (`missing`, `empty`, `template`, `ok`) against the template, the open
+    questions, and the status from the frontmatter. Judges presence only; what the content says
+    is for a person to judge. The frontmatter is never read as sections: a YAML comment line
+    would pass for a title."""
+    _, template_lines = split_frontmatter(template)
     _, template_sections, _ = _sections(template_lines, 0)
     guidance = {name: _section_text(section) for name, section in template_sections.items()}
 
-    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    _, lines = split_frontmatter(text)
     title, sections, _ = _sections(lines, 0)
     preamble = [
         line for line in lines[: next((i for i, ln in enumerate(lines) if ln.startswith("## ")), len(lines))]
@@ -171,7 +175,8 @@ def assess(text: str, template: str) -> tuple[list[tuple[str, str]], list[str]]:
             else:
                 state = "ok"
         states.append((name, state))
-    return states, _questions(sections.get(OPEN_QUESTIONS), guidance.get(OPEN_QUESTIONS, ""))
+    questions = _questions(sections.get(OPEN_QUESTIONS), guidance.get(OPEN_QUESTIONS, ""))
+    return states, questions, status_of_text(text)
 
 
 def _spec_dir(root: Path, raw: str | None, config=None) -> Path:
@@ -244,16 +249,22 @@ def _run_assess(args: argparse.Namespace, out: Output, root: Path) -> cli.Result
         path = spec_dir / (block.get("file") if isinstance(block.get("file"), str) else INTENT_FILE)
     if not path.is_file():
         raise UsageError(f"{args.file or path}: no such intent file")
-    states, questions = assess(
+    states, questions, status = assess(
         path.read_text(encoding="utf-8"), template_text(args.config, root, INTENT_FILE)
     )
+    out.print(f"Status: {status.value}" + (f" ({status.problem})" if status.problem else ""))
     for name, state in states:
         out.print(f"{name}: {state}")
     out.print(f"Open questions: {len(questions)}")
     for question in questions:
         out.print(f"  - {question}")
     return cli.Result(
-        data={"sections": [{"section": n, "state": st} for n, st in states], "open_questions": questions}
+        data={
+            "status": status.value,
+            "status_problem": status.problem,
+            "sections": [{"section": n, "state": st} for n, st in states],
+            "open_questions": questions,
+        }
     )
 
 

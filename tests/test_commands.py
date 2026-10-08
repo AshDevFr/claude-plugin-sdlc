@@ -171,6 +171,29 @@ class PlanCommandTest(unittest.TestCase):
         self.assertIn("skills/spec-template/plan.md", text)
 
 
+class ReadyToImplementTest(unittest.TestCase):
+    """Building a spec whose intent isn't ready-for-code, or whose dependencies aren't done, is
+    warned about before any work starts; never refused."""
+
+    def test_plan_and_implement_warn_before_starting(self):
+        for name in ("plan", "implement"):
+            with self.subTest(command=name):
+                text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
+                first_step = text[: text.index("## Step 2")]
+                for needle in ("ready_to_implement", "blocked_by", "unknown (tracker)", 'specs" coverage'):
+                    self.assertIn(needle, first_step)
+                prose = " ".join(first_step.split()).lower()
+                self.assertIn("name each blocking spec", prose)
+                # A tracker dependency: the engineer confirms; with nobody to ask, the code does.
+                self.assertIn("nobody to ask", prose)
+
+    def test_propose_reports_unmet_dependencies_without_judging_readiness(self):
+        text = (COMMANDS / "propose.md").read_text(encoding="utf-8")
+        self.assertIn("blocked_by", text)
+        self.assertIn("doesn't affect readiness", text)
+        self.assertNotIn("dependencies not done", text)
+
+
 class ImplementCommandTest(unittest.TestCase):
     def setUp(self):
         self.text = (COMMANDS / "implement.md").read_text(encoding="utf-8")
@@ -217,6 +240,10 @@ class IntentCommandTest(unittest.TestCase):
         self.assertIn('specs" --json intent new', self.text)
         self.assertIn("intents/", self.text)
 
+    def test_the_status_is_frontmatter_written_as_draft(self):
+        self.assertIn("status: draft", self.text)
+        self.assertNotIn("Status: draft.", self.text)
+
     def test_writes_one_file_and_stops(self):
         self.assertIn("no spec, no branch, no commit", self.prose.replace("*", ""))
         self.assertIn("/sdlc:start", self.text)
@@ -230,6 +257,11 @@ class StartFromIntentTest(unittest.TestCase):
         self.assertIn("intents/YYYY-MM-DD-<slug>.md", self.text)
         self.assertIn("intent only", self.text)
         self.assertIn("--date <date>", self.text)
+
+    def test_asks_what_the_spec_depends_on_and_passes_it_to_the_helper(self):
+        self.assertRegex(self.text, r'specs" new [^\n]*--depends-on')
+        self.assertIn('specs" --json deps', self.text)
+        self.assertIn("depends on another spec", self.text)
 
     def test_the_id_uses_the_local_date(self):
         # Spec ids take the engineer's local date; UTC would date an evening's spec tomorrow.

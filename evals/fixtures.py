@@ -26,7 +26,10 @@ SECTIONS = {
 def filled_spec(
     repo: Repo, *, criteria: str | None = None, extra: dict | None = None, commit: str | None = None
 ):
-    """The sandbox spec with real content in every section and no open questions."""
+    """The sandbox spec with real content in every section and no open questions, its intent
+    marked `ready-for-code` as an approved spec's would be, so plan and implement don't warn."""
+    intent = repo.read(f"{SPEC_DIR}/intent.md")
+    repo.write(f"{SPEC_DIR}/intent.md", intent.replace("status: ready-for-spec", "status: ready-for-code", 1))
     sections = dict(SECTIONS, **(extra or {}))
     if criteria is not None:
         sections["Acceptance criteria"] = criteria

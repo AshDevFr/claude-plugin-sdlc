@@ -17,8 +17,8 @@ it exists to keep.
 ## The sections
 
 The template in use is the team's `<specs_dir>/templates/intent.md` when it exists, otherwise
-the plugin's own at `${CLAUDE_PLUGIN_ROOT}/tools/specs/sdlc_specs/templates/intent.md`. After a
-`# Intent: <name>` title and an `Author: ... Status: ...` line:
+the plugin's own at `${CLAUDE_PLUGIN_ROOT}/tools/specs/sdlc_specs/templates/intent.md`. After the
+frontmatter (see Status below), a `# Intent: <name>` title and an `Author: ...` line:
 
 - **Problem**: the current situation and what hurts, concretely. "Customers phone the contact
   center to ask where their claim is" beats "improve claim visibility".
@@ -27,6 +27,30 @@ the plugin's own at `${CLAUDE_PLUGIN_ROOT}/tools/specs/sdlc_specs/templates/inte
 - **Affected users and systems**: who and what this touches.
 - **Constraints**: limits the solution must respect: security, data, compatibility, dates.
 - **Open questions**: what is still unknown, and who can answer it.
+
+## Status
+
+An intent kept as a file is the ticket for its request, so where the request stands is written
+in the file itself, in its frontmatter:
+
+```yaml
+---
+status: draft   # draft | ready-for-spec | ready-for-code | done | dropped
+---
+```
+
+- `draft`: still being written.
+- `ready-for-spec`: a spec can be written from it.
+- `ready-for-code`: the spec is approved; it can be built once the specs it depends on are done.
+- `done`: implemented and merged.
+- `dropped`: not doing it.
+
+A person sets every value. The plugin never changes it on its own: the only status it ever
+writes is `draft`, when it creates an intent. No frontmatter, or no `status` in it, means
+`draft`, so intents written before the field keep working. Changing the status isn't changing
+the request: the spec's record of the intent leaves the frontmatter out, so it doesn't report
+the intent changed. A spec written from a ticket rather than a file takes its status from the
+tracker instead; the plugin doesn't read trackers.
 
 ## Writing one before the spec
 
@@ -42,8 +66,9 @@ Start with the facts the helper can establish:
 "${CLAUDE_PLUGIN_ROOT}/tools/specs/specs" intent assess <spec-dir>        # or --file <path>
 ```
 
-It reports each section as `missing`, `empty`, `template` (still the guidance text) or `ok`, and
-lists the open questions. Then judge what it can't:
+It reports each section as `missing`, `empty`, `template` (still the guidance text) or `ok`, the
+status (`invalid`, with the reason, when the frontmatter holds something else), and lists the
+open questions. Then judge what it can't:
 
 - **A vague outcome**: nothing anyone could check ("better", "faster", "improved").
 - **Unclear scope**: nothing that says where the change stops.
